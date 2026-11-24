@@ -660,7 +660,7 @@ function showNow(it){lastNow=it;const card=$('now');card.classList.remove('red',
  if(V.rival)sub+=' · спорно с №'+V.rival.g+' ('+Math.round(V.rival.p*100)+'%)';if(V.learn)sub+=' · по журналу, отметок: '+V.learn;
  $('nowSub').textContent=sub;renderItems(it);$('nowItemsWrap').hidden=false;renderPip(it)}
 function renderItems(it){const V=view(it);if(!V)return;const G=V.G,sizes=[...new Set(G.items.map(x=>x.ns))].sort();
- $('sizeLbl').textContent=V.auto?(sizeSel===null?'Размер ящика: '+V.auto+' (по экрану)':'Размер ящика (по экрану было '+V.auto+')'):'Размер ящика: не определился';
+ $('sizeLbl').textContent=V.auto?(sizeSel===null?'Размер ящика: '+V.auto+(it.tg?' (по сетке торговца)':' (по экрану)'):'Размер ящика (по экрану было '+V.auto+')'):'Размер ящика: не определился';
  $('sizeChips').innerHTML=['', ...sizes].map(s=>`<button data-s="${s}" class="${s===V.key?'act':''}">${s||'Все'}</button>`).join('');
  $('nowItems').innerHTML=V.list.length?'':`<li><span></span><span class="nm">${esc(stText(V))}. Выбери размер кнопкой, чтобы увидеть предметы</span></li>`;if(V.list.length)$('nowItems').innerHTML=[...V.list].sort((a,b)=>b.p-a.p).map(x=>`<li class="${x.t}"><span class="dot t-${x.t}" title="${TIER[x.t]}"></span><span class="nm">${esc(x.n)}</span><span class="num">${x.s}</span><span class="num">${x.p?fmt(x.p):'—'}</span><button class="sm" data-n="${esc(x.n)}" title="Отметить, что в ящике был этот предмет">${it.found===x.n?'✓ выпал':'выпал'}</button></li>`).join('')}
 $('nowItems').addEventListener('click',e=>{const b=e.target.closest('button[data-n]');if(b&&lastNow)markFound(lastNow,b.dataset.n)});
@@ -719,6 +719,17 @@ document.querySelectorAll('.impFile').forEach(el=>el.addEventListener('change',i
 // Время кадров и звуков сводится к одним часам (performance.now), потом — к отсчётам звука.
 const VIS={reader:null,video:null,on:false,w:null,busy:false,lastSent:-1e9,vOff:null,hl:[],lastHl:-1e12,Phist:[],P:0,sr:48000,offs:[]};
 const WSRC=String.raw`
+let GC=null,GX=null,TPL=[],SOFT=[],LC=new Map(),autoSeen=false;
+const unb=s=>{const b=atob(s),u=new Uint8Array(b.length);for(let i=0;i<b.length;i++)u[i]=b.charCodeAt(i);return u};
+// сетка: берём кусок кадра в полном качестве, подписи узнаём один раз на ящик
+function gridOf(fr,sw,sh){const R=TraderGrid.REG(sw,sh);if(!GC||GC.width!==R.dw||GC.height!==R.dh){GC=new OffscreenCanvas(R.dw,R.dh);GX=GC.getContext('2d',{willReadFrequently:true});GX.imageSmoothingQuality='high'}
+ GX.drawImage(fr,R.sx,R.sy,R.sw,R.sh,0,0,R.dw,R.dh);const px=GX.getImageData(0,0,R.dw,R.dh).data,g=TraderGrid.gray(px,R.dw,R.dh),r=TraderGrid.scan(g,R.dw,R.dh);if(!r||r.closed<4)return null;
+ let known=0;const boxes=r.boxes.map(b=>{const key=b.c+','+b.r+','+b.w+','+b.h,old=LC.get(key);let q=null;if(old){let s=0;for(let i=0;i<b.lb.length;i+=3)s+=Math.abs(b.lb[i]-old.lb[i]);if(s/(b.lb.length/3)<9)q=old.q}
+  if(!q){q=TraderGrid.classify(b.lb,TPL,SOFT);LC.set(key,{lb:b.lb,q});if(LC.size>400)LC.clear()}if(q.k)known++;return{c:b.c,r:b.r,w:b.w,h:b.h,k:q.k,lb:q.k?null:b.lb}});
+ const o={boxes,known,rows:r.rows,off:(r.f-TraderGrid.MY)/TraderGrid.S,dx:r.dx/TraderGrid.S,sb:r.sb};if(boxes.length>=3)o.cur=curOf(px,R.dw,R.dh,sw,o);return o}
+// курсор ищем на том же куске в полном качестве; шаблон снят при 0,625 размера экрана
+function curOf(d,w,h,sw,gr){const T=TraderGrid,k=T.S/(T.K.cell*sw)/0.625,f=q=>T.cursor(d,w,Math.ceil(2*q)+1,Math.ceil(2*q)+1,w-Math.ceil(9*q)-1,h-Math.ceil(8*q)-1,q);
+ let p=f(k);if(!p&&Math.abs(sw/2560-1)>0.1)p=f(1.349);return p?{cx:(p.x-T.MX)/T.S-gr.dx,cy:(p.y-T.MY)/T.S-gr.off}:null}
 let C=null,X=null,clean=null,lastHl=-1e12,hlStart=0,P=0,resync=false;const RING=[];
 // Окно торговца: отпечаток кадра 96×54 (границы элементов), сравниваем по 48 блокам с запомненными отпечатками
 const SW=96,SH=54,BW=12,BH=9,NB=48;let SC=null,SX=null,TP=[],TN=[],TM=null;
@@ -737,6 +748,7 @@ function crop(src,r){const[bx,by,bw,bh]=r.box,pad=Math.round(Math.max(bw,bh)*0.3
 onmessage=async e=>{const m=e.data;
  if(m.cmd==='P'){P=m.P;return}
  if(m.cmd==='resync'){resync=true;return}
+ if(m.cmd==='lbl'){TPL=m.hard.map(x=>({k:x[0],a:unb(x[1])}));SOFT=m.soft.map(x=>({k:x[0],a:unb(x[1])}));LC.clear();return}
  if(m.cmd==='tr'){TP=m.pos;TN=m.neg;trMask();if(C&&TM)postMessage({type:'tr',tr:trScore(sigOf())});return}
  if(m.cmd==='snap'){if(!C){postMessage({type:'snap',id:m.id,sig:null});return}const sig=sigOf();postMessage({type:'snap',id:m.id,sig,blob:await C.convertToBlob({type:'image/jpeg',quality:.9})});return}
  if(m.cmd==='reset'){clean=null;lastHl=-1e12;for(const f of RING)f.b.close();RING.length=0;return}
@@ -748,7 +760,7 @@ onmessage=async e=>{const m=e.data;
   const blob=await c.convertToBlob({type:'image/jpeg',quality:0.88});postMessage({type:'dbg',id:m.id,blob});return}
  const fr=m.frame,ts=m.ts;try{const sw=fr.displayWidth||fr.width,sh=fr.displayHeight||fr.height,f=Math.min(1,1600/sw),W=Math.round(sw*f),H=Math.round(sh*f);
   if(!C||C.width!==W||C.height!==H){C=new OffscreenCanvas(W,H);X=C.getContext('2d',{willReadFrequently:true})}
-  X.drawImage(fr,0,0,W,H);fr.close();const img=X.getImageData(0,0,W,H),t=CargoVision.tints(img),bf=clean;let out={type:'f',ts,hl:false,r:null,tr:TM?trScore(sigOf()):null};
+  X.drawImage(fr,0,0,W,H);let gr=null;try{gr=gridOf(fr,sw,sh)}catch(e){}fr.close();const img=X.getImageData(0,0,W,H),t=CargoVision.tints(img),bf=clean;let out={type:'f',ts,hl:false,r:null,tr:TM?trScore(sigOf()):null};if(gr&&gr.known>=3){autoSeen=true;out.auto=true;out.tr=1}else if(autoSeen&&out.tr==null)out.tr=0;if(gr&&(gr.known>=3||gr.boxes.length>=6&&out.tr>=0.5)){out.grid=gr;out.cur=gr.cur}
   // кадр без новой зелени — новый «до»; «зелень» дольше 6 с — уже другой экран, а не подсветка
   // после итога действия (ящик положили) берём новый «до»: на экране мог появиться цветной фон положенного предмета
   if(resync&&!CargoVision.hasHighlight(img,t,null,true)){resync=false;clean={ts,t}}
@@ -758,11 +770,119 @@ onmessage=async e=>{const m=e.data;
   const k=Math.min(1,1280/W);const b=await createImageBitmap(C,{resizeWidth:Math.round(W*k),resizeHeight:Math.round(H*k)});RING.push({ts,b,hl:out.hl});while(RING.length>30)RING.shift().b.close();
   postMessage(out,out.shot?[out.shot]:[])}catch(err){try{fr.close()}catch(_){}postMessage({type:'f',ts,hl:false,r:null,err:String(err)})}}
 `;
+// ===== Сетка торговца (выполняется в Worker) =====
+const TGSRC=String.raw`
+/* Сетка торговца: ящики, подписи, прокрутка, курсор. Без DOM: работает и в Worker, и в тестах.
+   Вход — серый кусок экрана, где клетка ровно S пикселей (его готовит REG). */
+const TraderGrid=(()=>{
+ const S=72,MX=18,MY=8,COLS=9;                      // клетка, поля слева и сверху, колонок
+ // доли экрана 16:9 (замерено на 2000×1125): левый край сетки, шаг клетки, верх и низ видимой части
+ const K={x0:0.65375,cell:0.03336,y0:0.1760,y1:0.8222};
+ const LW=S-4,LH=20;                                // кусок подписи: первая строка, ширина в одну клетку
+ // какой прямоугольник кадра брать и во что его вписать
+ function REG(W,H){const c=K.cell*W,k=S/c;return{sx:K.x0*W-MX/k,sy:K.y0*H-MY/k,sw:(COLS*S+2*MX)/k,sh:(K.y1-K.y0)*H+2*MY/k,dw:COLS*S+2*MX,dh:Math.round((K.y1-K.y0)*H*k+2*MY)}}
+ function gray(d,w,h){const g=new Uint8Array(w*h);for(let i=0;i<g.length;i++)g[i]=(d[i*4]*77+d[i*4+1]*150+d[i*4+2]*29)>>8;return g}
+ const T=9;                                          // насколько рамка ярче соседей
+ // вертикальные и горизонтальные тонкие светлые линии
+ function lines(g,w,h){const V=new Uint8Array(w*h),Hh=new Uint8Array(w*h);for(let y=4;y<h-4;y++)for(let x=4;x<w-4;x++){const i=y*w+x,v=g[i];
+   if(v-Math.max(g[i-4],g[i+4])>T)V[i]=1;if(v-Math.max(g[i-4*w],g[i+4*w])>T)Hh[i]=1}return{V,H:Hh}}
+ // длинные отрезки линий: короткие — это буквы и значки
+ function prof(L,w,h,vert,run){const n=vert?w:h,m=vert?h:w,o=new Float32Array(n);for(let a=0;a<n;a++){let r=0;for(let b=0;b<=m;b++){const on=b<m&&(vert?L[b*w+a]:L[a*w+b]);if(on){r++;continue}if(r>=run)o[a]+=r;r=0}}return o}
+ const pk=(p,c,r)=>{let m=0;for(let i=c-r;i<=c+r;i++)if(i>=0&&i<p.length&&p[i]>m)m=p[i];return m};
+ function scan(g,w,h){const L=lines(g,w,h),pv=prof(L.V,w,h,true,S*0.6|0),ph=prof(L.H,w,h,false,S*0.6|0);
+  // сдвиг по x — маленький (сетка стоит на месте), по y — любой (прокрутка)
+  let bx={s:-1,d:0};for(let d=-8;d<=8;d++){let s=0;for(let k=0;k<=COLS;k++)s+=pk(pv,MX+k*S+d,1);s-=Math.abs(d);if(s>bx.s)bx={s,d}}
+  let by={s:-1,f:0};for(let f=0;f<S;f++){let s=0;for(let y=f;y<h;y+=S)s+=pk(ph,y,1);if(s>by.s)by={s,f}}
+  if(bx.s<S*4||by.s<S*4)return null;
+  const X=k=>MX+bx.d+k*S;let f=by.f;if(f-S>=MY-5)f-=S;while(f<MY-5)f+=S;   // первая линия в видимой части
+  const rows=Math.floor((h-MY+5-f)/S);if(rows<2)return null;const Y=k=>f+k*S,ins=8;
+  const vb=(c,r)=>{let a=0,n=0;for(let y=Y(r)+ins;y<Y(r+1)-ins;y++){n++;let q=0;for(let d=-3;d<=3&&!q;d++)q=L.V[y*w+X(c)+d]||0;a+=q}return a/n>0.5};
+  const hb=(c,r)=>{let a=0,n=0;const y=Y(r);if(y<4||y>=h-4)return y<=MY+5||y>=h-MY-5;for(let x=X(c)+ins;x<X(c+1)-ins;x++){n++;let q=0;for(let d=-3;d<=3&&!q;d++)q=L.H[(y+d)*w+x]||0;a+=q}return a/n>0.5};
+  const vB=[],hB=[];for(let r=0;r<rows;r++)for(let c=0;c<=COLS;c++)vB[r*(COLS+1)+c]=vb(c,r);for(let r=0;r<=rows;r++)for(let c=0;c<COLS;c++)hB[r*COLS+c]=hb(c,r);
+  const par=Array.from({length:COLS*rows},(_,i)=>i),find=i=>par[i]===i?i:(par[i]=find(par[i]));
+  for(let r=0;r<rows;r++)for(let c=0;c<COLS;c++){if(c+1<COLS&&!vB[r*(COLS+1)+c+1])par[find(r*COLS+c)]=find(r*COLS+c+1);if(r+1<rows&&!hB[(r+1)*COLS+c])par[find(r*COLS+c)]=find((r+1)*COLS+c)}
+  const comp=new Map();for(let i=0;i<par.length;i++){const p=find(i);comp.has(p)?comp.get(p).push(i):comp.set(p,[i])}
+  const boxes=[];let cells=0;
+  for(const cs of comp.values()){const xs=cs.map(i=>i%COLS),ys=cs.map(i=>i/COLS|0),c0=Math.min(...xs),r0=Math.min(...ys),bw=Math.max(...xs)-c0+1,bh=Math.max(...ys)-r0+1;
+   if(cs.length!==bw*bh||bw>4||bh>4)continue;let ok=true;
+   for(let q=0;q<bw&&ok;q++)ok=hB[r0*COLS+c0+q]&&hB[(r0+bh)*COLS+c0+q];for(let q=0;q<bh&&ok;q++)ok=vB[(r0+q)*(COLS+1)+c0]&&vB[(r0+q)*(COLS+1)+c0+bw];if(!ok)continue;cells++;
+   const lb=label(g,w,X(c0),Y(r0));if(!lb.ink)continue;boxes.push({c:c0,r:r0,w:bw,h:bh,lb:lb.a})}
+  const sb=scrollbar(g,w,h,X(COLS));
+  return{boxes,rows,f,dx:bx.d,X0:X(0),closed:cells,sb,vh:h-2*MY}}
+ // подпись: первая строка; ink — есть ли там вообще буквы
+ function label(g,w,x,y){const a=new Uint8Array(LW*LH);let n=0;for(let j=0;j<LH;j++)for(let i=0;i<LW;i++){const v=g[(y+3+j)*w+x+3+i]||0;a[j*LW+i]=v;if(v>85)n++}return{a,ink:n>=25}}
+ // бегунок прокрутки: сколько строк осталось выше
+ function scrollbar(g,w,h,xr){let best=null;for(let x=xr+4;x<Math.min(w,xr+15);x++){let run=0;for(let y=MY;y<=h-MY;y++){const on=y<h-MY&&g[y*w+x]>45;if(on){run++;continue}if(run>30&&(!best||run>best.n))best={n:run,y:y-run-MY};run=0}}
+  if(!best)return null;const vh=h-2*MY,q=best.n/vh;if(q>0.97)return{off:0,q};return{off:Math.max(0,best.y)/vh*(vh/q)/S,q}}
+ // сходство подписей: корреляция со сдвигом ±3
+ function ncc(a,b){let best=-1;for(let dy=-3;dy<=3;dy++)for(let dx=-3;dx<=3;dx++){let sa=0,sb=0,saa=0,sbb=0,sab=0,n=0;for(let y=3;y<LH-3;y++)for(let x=3;x<LW-3;x++){const u=a[y*LW+x],v=b[(y+dy)*LW+x+dx];n++;sa+=u;sb+=v;saa+=u*u;sbb+=v*v;sab+=u*v}
+   const va=saa-sa*sa/n,vb=sbb-sb*sb/n;if(va>n*4&&vb>n*4){const c=(sab-sa*sb/n)/Math.sqrt(va*vb);if(c>best)best=c}}return best}
+ // образцы из самой игры (tpl) — точные; образцы из размытого видео (soft) сравниваем с размытой подписью
+ function blur(a){const o=new Uint8Array(LW*LH);for(let y=0;y<LH;y++)for(let x=0;x<LW;x++){let s=0,n=0;for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){const X=x+dx,Y=y+dy;if(X<0||Y<0||X>=LW||Y>=LH)continue;const q=G5[dy+2]*G5[dx+2];s+=q*a[Y*LW+X];n+=q}o[y*LW+x]=s/n}return o}
+ const G5=[0.12,0.5,1,0.5,0.12];
+ function top2(a,tpl){let b={k:null,s:-1},s2=-1;for(const t of tpl){const s=ncc(t.a,a);if(s>b.s){if(b.k!==t.k)s2=Math.max(s2,b.s);b={k:t.k,s}}else if(t.k!==b.k&&s>s2)s2=s}return{k:b.k,s:b.s,s2}}
+ function classify(a,tpl,soft){const h=top2(a,tpl);if(h.s>=0.62&&h.s-h.s2>=0.06)return{k:h.k,s:h.s,how:'hard'};
+  if(soft&&soft.length){const q=top2(blur(a),soft);if(/[RK]/.test(q.k))q.s2=top2(blur(a),soft.filter(x=>x.k===q.k||!/[RK]/.test(x.k))).s2;if(q.s>=0.76&&q.s-q.s2>=0.08)return{k:q.k,s:q.s,how:'soft'}}return{k:null,s:h.s}}
+ /* Курсор игры — сплошная белая стрелка (остриё слева вверху), размер замерен на кадре шириной 1600 с экрана 2560.
+    ON — точки, которые обязаны быть белыми, OFF — обязаны быть темнее (слева и вдоль косого края) */
+ const ON=[[0,1],[0,2],[1,2],[0,3],[1,3],[2,3],[0,4],[1,4],[2,4],[3,4],[0,5],[1,5],[2,5],[3,5],[0,6],[1,6],[2,6]],OFF=[[-2,0],[-2,1],[-2,2],[-2,3],[-2,4],[-2,5],[-2,6],[3,0],[4,1],[5,2],[6,3],[7,4],[8,5],[0,-2],[1,-2]];
+ function cursor(d,w,x0,y0,x1,y1,k){k=k||1;let best=null;const at=(x,y)=>{const i=(y*w+x)*4;return Math.min(d[i],d[i+1],d[i+2])};
+  for(let y=y0;y<y1;y++)for(let x=x0;x<x1;x++){if(at(x,Math.round(y+3*k))<165||at(x,Math.round(y+2*k))<150)continue;
+   let on=0,mn=255,off=0,mx=0;for(const[i,j]of ON){const v=at(Math.round(x+i*k),Math.round(y+j*k));on+=v;if(v<mn)mn=v}if(mn<150||on/ON.length<212)continue;
+   let bright=0;for(const[i,j]of OFF){const v=at(Math.round(x+i*k),Math.round(y+j*k));off+=v;if(v>185)bright++}if(bright>2)continue;
+   const s=on/ON.length-off/OFF.length;if(s>130&&(!best||s>best.s))best={x,y,s}}return best}
+ return{S,MX,MY,COLS,K,LW,LH,REG,gray,scan,label,ncc,classify,cursor}})();
+`;
+// образцы подписей: точные — с кадра игры, размытые — с кадра видео; свои — из localStorage
+const LBT={hard:[["Z", "ERARDxEQEBAREREQEBAQEREQEBAQEBASEhEPDg8REhISEREREREREhERERERERISEREQEBAREhEQEBEQDw8PDg8SEhEQCwoPDRASEhISEhMTEhISERERERERERISERAPEBAQERERERESEhISEhMSEhISERERERERERESEREQEBEQDgwNCw0RDxo3RkkvFxMTEhEREhISEhISEREREREQEBAQEBESEhEREhISEhISERERERISEhISEhERERAQEBAQEBESExITIhwoIw4POWRGS1wtFhAJBAUKDgwGBgYFBgsMCQcGCA0QEA8KAwMFDAwIBwgLDgwGDQ8NBgwICQwMCgoLCgoOERAHCxBPcF8oBQ4yRxwhXz0WHEliWC8KJmZjZGJWEws4XGNBGQ8PEzllYWAYGEdhUycIKEoGDRJVFDUfDQovMhArLRAREz4aR0hIWlgvCRQWIDBhOA89a29yXSE+rGpsa1sVIl9wcm06CRAeaZBxnCRHbW52WBpCjgUPHKUjZDcTDVRXFkpJDA0Wdy9+LwBVmFgHDxI6WHYvCjoqAx1XRzqKAQUHBQ0rNREHUVQEECJuQhFwIHFDCDNhOj2KBw8eoCJeMwwGTFAUT2MzKBhyLnozK22LUgcSFSxCazQNHjE3QmJNO40HEhMTERcoNThsXAQOIoAzGHMneDgHGk1HO4oIDSCeIF1XOzZvWxRYg19iMnMveD1XUlhUCBETDxNSPw1JfoyRiks4jQgWFBAMLWiIjqJmAA4qjRwWcy53NgkVSkkygh4ULqEjY46LiqlrFEpMHF1iey16YlcySVYJHyQOElQ/DXZGBRFQUjmQCxATEA1cTxkETlgAFD5/CRF2JnU6Bx5RQxpgXTRbpCNgNQsDSlEYS0gRNHF/LoaAPxZJVQpDXB4jZDoQcEgUM2lVQZELEBMQDltLIB5lZxAjYmAXHnohaE0cQl8zDCJNVlSmImI4Fw5PUxdMTxxPaXgulX4uDEhWCzB1gX1iJwlQfIV/eV9YhAsQExAMMWyBf3p7ZFGjjoJ/nSU2bn57SxMQDxESH5MfWjYTC0tNEliXhH09by6IWBoNRVALEhMTEhAOEBMUFBEQDw4TCxASEBQRFBMWFQ8eSEsUEht1Hw8REBQUDw4NDxANEgUOCxAODg0HDhUVEwsNCBMSEQ8PEQ4SDw4ODxAQDw4NDg4PDw4PEBEQEQ8ODhAQDA0XGhAPECATEA8NDg8QEBARERANDg4OEREPDw8PDg4ODw4PDg8RDw0PDxMRERERERAQEBARERERERAQEBAQEBAQERIRDw0OEBESEBEREREQEBAQEREREREREREREREREREREREREREREREQEREPExEREREREBAQEBAREREREBAQEBAQEBARFRgXExEREhEREREREBAQEBAREREREREREREREREREREREREREREREREREA8TEREREREQEBAQEBEREREQEA8QEBAQDxMcJCMdHRkTEBEREREQEBAQEBEREREREREREREREREREREREREREREREREQDxESEhISDxARERASEhESEBEQDhEQDhQaHyUmJSUgGRMQEhQTERAQEBERERERERERERERERERERERERERERERERERERAPEBISDxEQFBUTERMUExMPEg8PEBEUHiUpKiglIxsUEBEXHBwZFxUSEBAREREREREREREREREREREREREREREREREREA8IBAYDBg4PCwgGCQ8SDQcNEA4GDBcXFhcbIB8XFhISFh0mKCUiHxwbGRUTEREREREREREREREREREREREREREREREQDw=="], ["N", "EBMTEA8OEBASERAREhISERAQERESEhISExEQERISEhISEhEPEBEREBAQEBAQEBAREREQDxASEhIREREQEBEQEBAREhIQERIREA8RExERERIRERAREhEQEBAQEA8MDA0PERISEREREhEREhISEhISERERERESEhEREhMSEQ4NDA0REREQEBITEikZDBAjLQsQEhERERAQEBAREBAQEBEaO0Q9IRIQEBAREBERERISEhISEhISERERERESEhESERAMJSUhJAoRERAQEhMSVzAHDT9gBw4LBgYIDBERDAcFBwwOF0tZRjcgEAQGDxIPCwcIDhAQCQsLCgsNDAsNDAkQEA4KBwA+cWMyAA4RERASExJuOwQMTHYFEjdeY00dERApUGBKIgwddDkbFBILRTIKEhQlQkAODhBHGR8sGgseMRgYPw4QDysmTE1EVF1FChEQEBITEms3AAdKcwcuZ25ubEYWF1BubGpJEiOAKyMcEAeGWgAMFkB+eA8QEoUoNlErCzBYKSl0DAwNTEebUwA1k4gHERAQEhMSbFgvNWx6DkxTCQIpZyEpVTILOFoeLI5MSEwnDIFzKyIYPHl1DxITgCU1TyUDKlYsMIY3LhJLRZZTFlSRgAcREBASExJweV5hi38TWV46O0SHLDJLKg4yViQykkQ4Y0wYgo1dVzc5dnUQDhN+JTdlUDdZaykzmmFpPlNImFU1VWV+CBEREBITEm5DCg5PdBZmnI2OjYsoMkwoDDFWJSx2Ew41WyKAWhlgajd0bikSIYcpNoSXip6MKSx5G0t4Y0aUZUVCSH4IEREQEhMSazoHDEpyEVFCCQgICgsyTCwOM1QgJ3IWDTFZIIBZBVN1M2dOZzhLlygzTSQCLVgnLHIMHYVnRpKIUidAfAgREhEREhFqOQQMTHQMR2EiGi8sEStXQB5DXBoidCcaUVYggV4YW206XRtLV0+PJzdPKgwuVCgudRo+e2NHmZ5JDkJ9CBESERESEWM3Bw9JagUnZH99bjUREkZ2gW8+ERZafH9xMhB9nIFyQzpYERQRFXYlNU0oDjBQKS+dgINJUUSYfSYIQXYKERMRERIRFA4NDxARCxUXEhQSExIQEhMRDxAREQ8VEhMVDBEXFRINCg8REg8OEQoLDA0PEBAMChYPFQwRCxIQDQsLEQ0REhEREhEPDxERDw8QERAODg8QEREQDw0NDxAREg4NDxEQDw8PDg4ODhAQEBAODg4ODxAPDg8ODQ0ODg4ODQ0PDw4NDhAREBITEhERERERERERERERERERERERERAQEBARDxAREhIRERAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAPEBAQEhMSEREREREREREREREREREREREREBAQEA8QFBcYFxUSEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBASExIRERERERERERERERERERERERAQEBAPDxUcIyQiHhoUEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBITEhESEhEPDxESEhATFBISEBAREREREhEVISMlJigkHRQQEBESEhAPEQ8OEBEREREREBAQEBESEBERERAQEhISExAPEg8RExIREA8PEhEQDxIUEhERDxATFBIVHCEnKCkmJiAXExERGR0dGBkXEQ4QEhISEQ8REhMREhIPEhITExIUExQWEQ0SEBMKBgYFBwgICwYFBwsODAsNEA4JCQ0UIyYfGhwbDwcIDBMaFBMRDg0ICQcHCAoNDxIRCwgKCAwOCAwTEg4KDgoOEQ4KEQ=="], ["E", "EBISDhISEhERERISDw4PERISEhMTEhERERISEhIRERAPEBESEhEREBARERIREREREhMSERAQERIREREREA8QEREREA8NDg0PDxESEhISExIREBAREhISERETEhEQERISEhISERAREhMTEhIREBAQEA8PDw8QERAPDxASEhISEhIREREREREQDxk5SUAbDA8SEhIREREREREREREREREREBARERESEhISEhISEhEQEBEREhEREREREBEQEBESExISEBESExISEhIRERAPQ19KU1QYDAcMDQwICw4MCAYHCxAPBgICBQwPDAYDAwQHEA4MBwUIDQ8LBQYGBgcMBgQEBgwQEQ4JBgYKEBISEhEREA8tNR0yaDASSxkMCzUsByJRYlw5DBBJTVxaLAsdSGViX1YXDSZTZEgeCDFpYmNgSBFGUF1ZKQ0MG0VhXkMVEhEREREQDwYGBhVPQBqRJg4QYkoaVHVsbWooFIxxaXRXHy50f2tqXBUSWHBtb0URVqpnbHeJGodyaXZYIhM+bmtpZToSEBERERAPEBswQGNJGo0fBgxcQz5vJwEOTlsYgjAGIGVEKVMkBAYFCxlvLQRCVyVPeQAGIYIZgS8HJGlCIVZBAAUyahIPEREREA8SLVlqgE4Zl043PnNDSX43OTtRdxx+IggPaFInVSsTEREPIWUiCC1OL056BA0igBl+IQkRakwmZFc3OkqIFA4REREQDw4PDh1PSRynlYyTmERLoYqLj4xqG4EjCw5qVCZUKxMSEREjYiIJKk4vTX0GDiKEHH8iCw5uUiZ7mouMjoEUDhERERAPFhcNGk5BGowfAgxgQkhvCQYLDA0SgigJFWlPKFMnERISDR1pKgwyTylLfAgSJYMegiUKFWtLI1UzBgYLBwkPEREREA8uMhgwZC4YjSgMEF1BNW9AGyQ/JBKKTx01Zz4rVCsSDxANGmo/HkpSIVB+BREgghuISxw2YzYbVVQfIDMrDxAREREQDz96gHpOFheGJAoPWUQQRn+Bf2UcFId5eX5MFy5PKBIQDw8TRnmBcDoNTnkGDyN9HYJ6eX1KGRI3cH98ay0QEBERERAPDxIRExYRChYMDgsPExISERETDxEVfikPEw4ODgoOEBAQEAwSFBIUFA4PFA0OChYUgCsPEhEQEBIUEhIUExEREREREA8PDg0ODxAPDg8QEA8QERAODg4ODxVfHAwQDxAREBAQERERDw8ODQ4QEA4OEA8LCxFiIQwODxAQDw4NDQ4QEBEREREQDxEREBAQEBAQEBARERERERERERIVER8SDxISEREREhIQEBAQEBAQEBAQEBAQDwwPER0TEBAQEBAQEBAQEBAQERERERAPEREQEBAQEBAQEBERERERERERERMRDxEPFBcWFBIQEA8QEBAQEBAQEBAQEBAQERIRDxAQEBAQEBAQEBAQEBAREREREA8RERAQEBAQEBAQEREREREREREREREOEhQdJCMfHRcRDxAQDxAQEBAQEBAQEBAQEQ4QEBAQEBAQEBAQEBAQEBEREREQDxIRERESEhEREhEQDw8QEBAPDhAPEBEZHSMpKSUgGRMSEBQVEQ8PERAQEBEREBAQDhAQEBAQEBAQEBAQEBAQERERERAPERMUEREREBAUFRMOEBIQEBAOEhMXHCQnJyknIBgUEREUHCMbFRQTEREREREREBAQEBAQEBAQEBAQEBAQEBAREREREA8REAwFBAUHBRATEwsKEA8LCgkLEx8YFRcXFhMOCQgPFh4ZFx0gHxwbFxIQDg4QEBAQEBAQEBAQEBAQEBAQEBEREREQDw=="], ["I", "DxIRERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERAJDBISCQoPEhESExMTEhMTEhETExMSEhISExQSERISEhISEhMUExERERISEhISERQUExIRERERERESEhMQEhMTERETEhoaEBQvHA4MDxESEA8QEQ4ODhAQDw4MDAwOEQ8NDg4PEBAPERMSDgwODxASEA8OExMRDgwNDhAQDhAQEQ0PDw4NDA4PSEgQJJhRFhYSEBETFA8QHCQjEg4ZICIiIiQgGB8kIBYRDxgUEBETFBkdDhMQEhoQDhchJB8UEBYcDhAPHxMXHyUlIyVGSBJJpU0VRSIKFC8zDCZRVlU5GTZRXmhiWUs9XVdTOBgLOC0WDyk1NlsaEA0tTRoTPFRWUTUPIE8HERJZIC5OXWhlWUlFGXx+RRhvNwgWSlAfZl0tQnMhGiU9alUjMFpwMDdnKwxGTyUORVZMpUsRFXqDH0NsRylTaCcrhAcPFZMsFCUyZmYnR0w6iVxAF3I9DBlMTDKOFg4MDw4REiNUQQwhS0sNE1I4ESdVLCBWSkGzgRcypogadVEWDx1JTi2HDRQalSsIDhVQVAtHW3BDUkEXfGE8TWtNOI4HDREQDxARIlNACyBKRw8UTkAVGVY2SmImPaFvVHBnfR+AZzo8RWJbKpE8QEqjLAcNFE9RBVF7cRpUQRuCakVUb086kAYNEhEPEBEiU0ALIEpJERZQQxcPTUZtYQxCkEGHfzB0IH9sQ0dKRy4skkdFUKYuChAWUVMJX5w/ElE9F3RCEh9QTDSQEQ0KCg4RESJTPwkgS0wPFVM9Fg4/cHxCBUOIH2FEHHIbd1EZGRYQDzCHGRwimS0KEBZRVAthjh4VUUAZcDkIFElPInNUJDhqHQ8QI1U+Bx5YdCcxaDMUDyZ9bB0HQIkIGhEbcRxQbz4eQFEeLIUKDxOVLQoSFlBWCz9UExQ5LRJQKgoRNTwJLlpTVkgUEBEaPC4JHFN6VFlFGw8LIWtJCg0wYAUKDxRQGhpMXVhaRBUiXAoMEmggCxIRNzwJGR0QERsWDiIZDQ0XGgkOJy4sFQ8REREbGAwdTVovLRwPIlNpVyYMEBckCg8PDB4TDh0tMy0cDxUjDA0SJxQQEQ0aHg4ODRMRDw0QEBEQDg0OEQ4NCw0QEREREREQDhMkIw0MEQ4ZPEcpEQ8PDg8QEhIODRISEA0MDQ4SEQ4RDxINERIRDg4QERARFBEQDxEREBAREBEREBAQDxEREBESExEQDQcJERIRDwoEBQoPEBAREhITFRISExESEhEPDxITEhMODw8QERAPDxASERIREREREREREREREREREBAQEBEQERERERERERAQEBAQEBAQERERERESEhISEhISEhEREREREhISEg8ODxMUEA4QExIREhEREREREREREREREREQEBAQEREREREREREREBAQEBAQEBARERERERISEhISEhISERERERESEhISERAVHh4ZFRMUEhESERERERERERERERERERAQEBAREREREREREREQEBAQEBAQEBEREREREhISEhISEhIRERERERISEhIPFyAoKCYiHBYSERIREREREREREREREREREBAQEBERERERERERERAQEBAQEBAQERERERESEhISEhISEhEREREREhISFBojJyQiIyMcFBIREhERERERERERERERERERERERERERERERERERERERERERERERERERERISEhISEhISEhEREBEUFRYbJiUmJyYfFxEPEg=="], ["P", "EBAREREQEBEREREQEREREBEREBAREBAQEREQEBAQEBAQEBAQEBERERERERERERERERERERERERERERERERERERERDg0IBwgHCxISEBERERMRERISEhITEhEUExIRERITEhITExISEhISEhARERERERESEhISEhISEhISEhISEhISEhISEhIQDyo8NzEeDhALDxAREA4NDxERERIQEBMRDw4PExMODRAQDw8REA8PDQ8REBAQEBEREREREREREREREREREREREREREREPcZN0ajwLDRkVEhEUFRkUDRARFh0ODxwkIxYRFRwhIyIeEBIVIiUfFBAQEBAQEREREREREREREREREREREREREREREQ9WPgAECA4PSCsQCTgwSD0UDBY5VA0eTlhYORYhS15WVUUWEzFVWVAoEhAQEBARERERERERERERERERERERERERERERD2BTFxoVCxBRVBUIb0RphDwHLoGFEkVkNUNuLC1aRyUoIA4PXkkuXlIhDhAQEBEREREREREREREREREREREREREREREPerCejlQTDR51GyN0LlitbhRLq4kNKh4UGXc0LVExEBMTDgs2GRAvWi8NEBAREREREREREREREREREREREREREREREQ9bTBE1YT0NF2YrXVQbWoBmXmGAigkXNT5EjTYsUDAPEhEQEC06PVJnMA0QERERERERERERERERERERERERERERERERD1dIBxtJSw8TTlKANAxfTk2RZk6IE1NdSEmSOS1QMA8RDxEWcVNIW2gwDhEREREREREREREREREREREREREREREREREPVkQFG0dLERM5e3kkCGNFJ19DOYobdioaHnw3LlAwDxEQER15IxgyYDIOEREQEBEREREREREREREREREREREREREREQ9bURU4YjkNESODThkMYEUIGxg2iBl0QR41jE44UDMREhIQGX0uHVl4Ng4RERAQEBAQERERERERERERERERERERERERD09rVllJFwwJI24tEg5GNAULDipgETxYVFhcWEM3Jg4RExARUldWW18zFRIQEBAQEBAREREREREREREREREREREREREPITQ0LRwOLV1nUh4SDyEbDA8RGCYQFC0xLB8rJRoWEBMUEQ0dLjUnIxkSEhEQDxAQEBEREREREREREREREREREREREQ8LCwwKDQ8iRUQlFREQERERERIQDhEODg4MDw4PEBARFBMRDw4ODw4NDhESEQ8QEBAQERERERERERERERERERERERERDxARERAQDwoEBQwREBEREhISEhEQEBAQExMTEREREBAREREREhMSEhITExERERAQEBAREREREREREREREREREREREREPEREREREREREREREREREREhISEhERERESEhISEREREREREREREhISEhISEhISEREREREREREREREREREREREREREREQ8RERERERERERERERERERESEhISERERERISEhIRERERERERERESEhISEhISEhIRERERERERERERERERERERERERERERDxERERERERERERERERERERISEhIREREREhISEhERERERERERERISEhISEhISEhEREREREREREREREREREREREREREREPEREREREREREREREREREREhISEhERERESEhISEREREREREREREhISEhISEhISEREREREREREREREREREREREREREREQ8RERERERERERERERERERESEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhERERERERERERERERERDw=="], ["H", "EQ8PDw4ODxISERERERAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBARERESERcaFxYVFBUUEhISERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERISEhANSXhvbVEOEREREhEREBARERAQEBEREBAQEREQEBAQEBAQEBARERAREREQEBAQEBEQEBAQEBAREREQEBERERAQERERFBFUVRVOfAgMCgoOCgsHCg8PCwkLEA4JCg4ODA4MCwsJCAoLChAMCQwMDgwJCgkIDgkLBwkGCxQVDwkJDg8MCAgICggSF1ZMCUSAHmKAfEgZFlo/Dw8yVx4XQ3uBbjEPcksuSRwxZmUOEhNuIxFPfoaLcyAYWn6BhmchDxIML1g0DxdbT116iw4fV0YIQYtFWy04Yysdg2weG1+IIhVWPChWUh6FVjRUHTp5dg4QEH4qKVdDJUdhJyJ2NSU/YycOFA8dV2EHJI4qHiQ1DCZZQAhBkFJCERVeLx2EiC0thYchCx0IATBbJINXNVEcPHp0BgMJeycyTSkMMVYmJ3oSCiVfIwwSEAxCdBo5eRIODRMNNFo3CUOVUjkVFF4zH26QUVOPZyMRSnh/jHAkglU1Uxs8fIx9gIWyLilcNgUtVyIggh0FJlwjDxQPCCxgRVlADREQGApKXSoMQpJRNxQWXTUiXHB1d2hXJR52W1RoaCR/VzZRGzt9g1dXWqEvFE1zbHV2JBhjb2BtbiYPERANGEV0ahgSEQ8aCGJZDQM8jE1JDRxjMCBbR1BROFcmI3sOADhlJn9VM04XOHt1CwYJfCsGOH9+a3AlEj+GY2NtJgwQEREQOIdjEBIRDxoykIVMTW2DNWdTXWEkHmI8FRctWSIefFVQbX88jYVyhmBqfnkREBGBKRlMUSQrVSgfV0oZJmAlDBIREAwsdEkTEREPGmOIenFyhHgSTHFsOBUWQywNDyU8GBRLbXJbWTZjfnt+eG1STw8QEVccJEMpCiE6HiNTHREdQB0NEBAREjBfKxEREQ4TRycAAAEqVQcHAwYKCwsJDRESDwoNDwQDAgMDBgcHBAEDBAUKDhAQCAkJCAwPDAkICAkNDwoJDRAOECE6T08YDxAQDgsTDQ8RDQ8VEA4NDg8ODxAREhIREBEREBAQEBAREBERERERERAQERAQEA8PDg0PEREQEBAQEBAREREQLlRHHg8SExAQEQ8PExIQEBEREhEQERESEhIREBESEhEREhISEhIRERAQEBAQEBASEhERERAODhESExMSERISEhEQEhEOEA8NDhISEhITEQ8RFBIRFBUREhISEhIREA4NERMSDxAQEBAPDxAQEBEREhISEhIREA8QEBAQERISExMSExMREA0PERASExIRDxESEhISEhISEhESEhISEhISEREQEBAQEREQERERERAQEBAQERERERISEhIRERERERERERESEhISEREQEBERERERERERERERERISEhISERISEhISEhIREREREREREREREREREBAQEBAREREREhISEhERERERERERERISEhIREREREREREREREREREREREhISEhISEhISEhISEhEREREREREREREREREQEBAQEBERERESEhISEREREREREREREhISEhERERERERERERERERERERESEhISEhISEhISEhISERERERERERERERERERAQEBAQERERERISEhIRERERERERERESEhISEREREREREREREREREREREQ=="], ["B", "EBESDhMTERAQEBAQEBAQEBAQEBAQEBATExASFBARERAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBEREREQEBAQEREPDw0PExEREhISEhISEhISEREREREQEBIREBERDRAQDRESEhISEhISEhISEhISEhISEhISEhISEhIRERERERESERITEhAaLTAkExEREREREREREREREBAQEBAQEBAQDxIcExQcEhERERERERERERERERERERERERERERERERERERERERERERISIU5RS1cxEAcGBgYHCAkHCAcJDQ4PDQsICxANFD1dWjUPCwgKDAwLCgsMCgcHCAsLCAcGBgYHCQsJBwgMEBELCAcHCgw1YjIuTDssWGxqaGhWRFpXY0YPDA83X2M7ExMtSEVLXy4RQSULCh0vHQ4iW2dPFxlOZ2xsaWJCFz5mZUcTDyxKYWRCFUFVEREcISdRZpSHW01comFjbjkRKmJpamAsFkVGDiaUTBmDVBUHQm4uGVFrZnZEIEZde4dxWUQ7bGNiajcWTnNrZ2I5SUwTEwwPCgUGY00AAj+YFAxJdhlPVh0XVksVSEcWWJhLGZV7Jhhtji8bShkFP2sdAgAySSICGlhLBAI8aiNOUx0PR1dKRxIUDhAOEQ9nUgYPQosHDiaTH103EhBOUhZISS5/aUIZkY47TI17MhMtMTVGdSUODzxPKxApaU44NUWRK0lFGw48WEZIEBEODg8QDGdSBQ5AigYPHZYhXzMPDExUFElgZVJNPRl+gF9+gVUxGV9vbXV7JRAPOk4rDCh4fW9ycH8jTEgeDjtZQ1AMERUUFBIQaVMHDUCQDA0mih1ZORMOTVIUUX18E0U+GXRVenxNTTEnjBsFHG8jDw86TikLJ2MqBggHBQdQTB0QQVk+YiUcPzoUDw5oUQMNQpooHEpwGkxSJyJURRNekz4PTEEbdTgzLCpPMiuGHxg+eCUODz1OJw0hVU8dHyoiDU9fMyBJUSdhamhtNxUQC19MBA1Ap2lmbjMQJF9paV0rGlp3GRRFOhtuMgsNKU0vH3VoZ3B1OBcPN0koDxMybGZmaDUSUXtwZ182ExsiJBwUFBINGxYMDj+SHyIeExASGSEiGhIPEhoQDxQYDhwTDxITExAPGyEkIB8WEg8TFBAQDxQeJSUhFA5OUS0fGxMTERMTEhISERESEhENOXsRERERERERExIREREQEBAQEBEQEREREREQEBEREhISEREREBAQERERERITEhEQDkY+Gw8REhMREhISEhISEhIQDg0TIBAQERERERISEREREREQEBAQEREREREREREREREREREREREQEBAREREREhEREBAQFRQTExISExESEhISEhISEhAREhAPERAREREREhIRERERERAQEBARERERERERERERERERERERERAQEBERERESEREQEBEODhAQEBETERISEhISEhISEhISExIREBERERESEhEREREREBAQEBEREREREREREREREREREREREBAQERERERIRERAQEBMUEQ8QEhMRERERERERERERERESEhEREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREQEhMSERISExERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERITEREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREg=="], ["F", "EREREBETEhISEhIREREREBEREREREREREREREREREREREREREREREREREBEREREREREREREQEBAPDw8PDw8QEBAQEhAMDQ4REhARERERERESEhISEhMTExMTExMTExMTEhISEhITExMTExMTExMTExMTEhIREREREREREREREREREBAQEBAUEyIyMjMtGRAPDw8QEBAREREREhISEhISEhISEhISERERERISEhISEhISEhISEhIRERAQEBAQEBAQEBAQEBAQEBAQEBMSU2VHS0IhDg0JCAoNDwwJCAgKDg8LDAwJCAgMDAwPEQ8LDA8KDQ0KCg0OCwgICQ0QEBAQEA0HBQUFCAsIBgYIDBAQDglgXSUrJxgPFlRlTRcJNVBbYj0NFC0jFVBnWR8eLx8PGzIdF0ASCTdBHAYoWmpYKg0PEBAPR2RnZ2U7ET5balkmEA0cRVdHCg4ODhRRbWN1QRJfe11oZjEXTj5XcGV0T0VNLw0mVy4hcRcPf4IoJF1uY2VfHxAQEQ94dF9iiGoea3llaVIaD0dnV0kMEBANHJYxCkRrJ2BYChZTYBVRRZs6CTFyZUsxCiVaMCVzF0CNgiRach0AG1xCEBARD3cvAANWbB9fPQgmZicYZEFXSQwQEA0ipBYLGncyXEcFEEBwE1psrR8ME3hxSTILJlsuJHYndWBmJHCEMzc8VVgPDxEPdzMEClttHFcvEhtkLB9vV1hJDBAQDiOeFAwVfDVeSgYNP3gSX5O0IA4PfG9LOgwtYysjelRdO1oncaBrbW9uRhEPEBB4NAUMXG4eWjISGWgtIYKCWkkMEBAOJKAZDR52MVxKBxBCcRNTTqQfCRV5XExVJ0l8KiaKeionWyZybwEDBQcFEBEPD3o1BgxbbR5cMxEbZSkeYS1ZSQwQEAwZjTUeSGcmYGAeI1BbFlNIlzsZOXE9I1lwcHEsKKZiGiNbJVd0LBYfLBYRExAOejULD1hrIGVNHy9jIBZhSFFCDRAQDhJNb2ZwPBFef2drXy0YSzpObWh3TRsNDg0nUykmkTsPIFQoIlpuYGVXGA0REAxxMgkOVGUfbX5kZU8YDkpqFxcQEBAQEBUjJR4RCmBSGyUfEw8TFBcgJiQYEREPDA8WEAsgEBEPFBEPGCIjIBsPERMSDRwOCgwWGCNaPyUfFg4RFx4RERERERERERITExELUTsIFhUSERARERESERAREREQEBAQDxAQERAQERAREhISERESEhIPERAQEBEOJE0sFRMSEREREhERERERERERERESFA8WEQwTExISEhEREREREREREREREBAQEBEREREREREREREREREREREREREREREUFRAREhISERESEREREREREREREQ4SEQ8PEBISEhEREREREREREREREREQEBAQEREREREREREREREREREREREREREREBAPEBISEhIRERIREREREREREREREBESEBAREhIRERERERERERERERERERAQEBAREREREREREREREREREREREREREREQDxAVExISEhERERERERERERERERERERIQEBEREhEREREREREREREREREREREREREREREREREREREREREREREREREREREQEBMTEREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREREA=="]],soft:[["D", "CAgLDw8NCAUFBgcGBQQEBgcHCAcCAgkGAQIDAwMEAwIEBQYGBgYGBgcJBwYHBgQCAgUHCAcDAwQDBAUGBQUEBQQDAgMHEB0pLioYBgEAAAAAAAEAAAAAAAAAAQAAAAABAQAAAAAAAAAAAQEAAQIBAQEBAAAAAAECAQAAAAAAAAABAQEAAAAAAAgfND5GRi0TDQ0RDggFCA8TExQSDgsJDBALBgMFCg8RDwsHBgUCAgYFAAABAwMCAgMHBgAEDREQBwMFBAIAAQQHCg4RBy9KRk1XQiolKjQrGxEWLTo9PjksIh8oMCQUBw4iMDUwJRgVFQ0NGhUDAAUMDgsLDhcWBhApNDAZDxYTCwMEEx0jLjYGMEYuNExIPjk8RUAxISE6UWJjWEM4OEFIQCwPHUVSVFNHNDAyKzBFMwkABxskIB8iKysdK0pTSzUwPTorERE5SkxZYAYtORMYPE1RSUVHSUYvJDRSc3JhSD5GTVJWRBkpX2RdZV9LSE1MVWxNDwAHJzs7Ozo5NzNCW1tTS1BgYFArKWB0bXd3By03DhZBW2RVQjVCUDEXFTBWUDolIjI6QldQICxaSjhQWU5NU1tlbkkLAAcpRlZaUDQnN0BBNzNHV2BpaVBNdH5vaFcKLDQNF0Rjb11ELj5QLw0CG0Q5IRIYMDc8WFYlL1k7Hz5QTVJcY2dmQAgABylMZ2tZLBo2PC4dHEJXWGVxZWN0dmpcQhAtMg0XRGFsYk87QUkpDAQgSj0lHCtMT0lfWSczYUEhPU5NXGxlXVo4BwAHKUxnZ1IoGDU9MR4cQ1ZRWmVjYGFkZ19GHz9HJjBWYWFaUUdIRCMJBCFLQCkfM1xcT2FgPUNfPB88T1FkclhIUTUHAAcoRFNSRC8nNT9BNjFDTUxOT0ZDSlhlYEcwVWJHUGxfTElLT0s9HQYDHkQ9KRsuWltMWmFUUU8tGTZKUGBoQS5FMgYABiM0NTMxNzgxPFFRST07Qz8zHxsyS11YQDJSX05VZ00xMjxHOyQPAgMUKyYYDRo7RkVCQkY+LBYOIS0uOT4jFiogBAAHFyAdGRgnKxsmQUhAJx8qJxwNCRkrOjgpJztEPEFKMRgbJjIkDgMAAwoSDwgBBxsqMSUgKyIOBQUNEA4TFwsHEQ4DAgYMDgwHBxQXCBAnLikRCRIRCwQCBw8YGRMOERQRExYOBgcLDgoDAQACAwQDAgACBwwOCggMCQMAAQMEAwQGAwIEBAMDAwMDAwEBBgcCBAsNCwQCBAQCAQABAwYGBQEAAAAAAAAAAAAAAAAAAAEBAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgICAAABAAABAQAAAAAAAAAAAAABAQIBAQAAAgAAAgIBAAABAgIBAQAAAQEBAQEBAAAAAAAAAAAAAAEBAQEAAAAAAQEBAgMCAgMCAQMDAQIDAwMBAAECAgUHBwcFAwECAAECAgEAAAECAQEBAQEBAQEBAAAAAAAAAAAAAAAAAAEBAQAAAAEBAQEBAgECAgIBAgMCAgICAQECBQcKDhAPDAgDAAIAAQAAAQEBAQEBAQABAQEBAQAAAAAAAAAAAAAAAAAAAAAAAAABAQEBAQEBAQEBAQECAgICAQEBAwUJDhMXGBQPCQQBAgAAAAEBAQEBAQEBAQEBAQEBAQEBAQAAAAAAAAAAAAAAAAABAQEBAQEBAQEBAQECAgICAQEBAQMHCw8UGRoXEgwHAwMCAAABAQEBAQEBAQEBAQEBAQEBAQEBAQAAAAAAAAAAAAAAAQEBAQEBAQEBAQEBAgICAgIBAQIECA0RExcaFxMNCQYHCQ=="], ["M", "CBEaGhYPCAIBAAAAAAAAAAABAgQEAwMCAQEBAgICAQEBAQECAgIBAQEBAgIDAwMCAgMEBAIAAAIDAwMDAwQEBAMDAgEbPFZZTDIWAgAAAAAAAAAAAAEAAAAAAAAAAAABAgIAAAAAAAECAQAAAAAAAQICAQAAAQMDAQAAAAEBAQAAAAAAAgUFAiZNZFhPRioRCw4VEgkCAQsTFhQNBAMJCggICQsNDwoGBwcHCQsGAgIGDAwMExYVDgYDAgMGDBIYGxkTDw4VGRYPCAYIKEZLJitIPiwjKToyHQoIITI5NScQDB0fGhkaHCElHRQXGRgcHhMKCBQmJiQwNzcoFAcBAw8iNEJGQDMsLDpCOiYOCRMlRkwjKEpJPz4/QD00JCM6REFBOR4eODcqJyoyOj0xJisuLjg/LxwQID9EQEBAPzYnEQMCGDpMVFFNSkhITk5FNSYkLSNKVzY2TU5LU0s0N0RARFZSQkZHLzFQTj46PEVNUUY9Q0VDUV1NNyIwU15bTUNCQTkcBgIfTFZSSEpWXFpSRz88P0RJKVJnUkxST01XRBoiQFJjdmlLUFVAQFlgX1xXTlFbXl9hXFBZZ2NYSEpaam9fVlVSRiUMBSBKSz0vNlFbV0MyLDdLVVwsU2NKQ0pPU1k+ChM7WHCBbUZITTk7V2VpaF5PUF5kZmZfUVllYF1jYl9tdGBRTEg+IQsGIUhEMSErTFtXPCYhMk5bYitKTB4ZNk5cXD4MFDlRZXRdMzAwGyRMWlhVT0dOXFVNTkxHUVtGRmpwYmpqTTMlIyIPAgQhSkc1IyxOX19DLCUxSVVZJ0pSKSU9R01SRzAzQEFJXlc9OTIUHEhOQj8+QUtVRjU3Oj1NW05OaGxhYV5MOy0iGAgAAyBIRDEhKktfZFdHPTk8QEYfR1xIQ0c5Lz1LVVFDKiZBTktJPBkaQD0qJyw2Qkg0ISMpMURYXVtYVlZPSk1MRDAXCAEDHD45KBsjQFZlaGJTPiolLRErPDYyLR0THSs2MiUTDR0qMTEmDg0kIhcVGB4lKh0REhUbKDU8Oy8sLiclLzQwIg8FAAEOHx4WDxMkPVRbUjwmFQ4TBhAaHBkRBwIGDBIQCgMABAwUFA8EAwsMCgkICQ0QDAYGBwkOFBkYDgsMCQgSFxYQBwIAAAIGCAcFBQwiOj40Hg8GAQMCAwgJCAUCAQEDBAMCAQABAwUFAwEAAgMDAwMDBAUDAgICAwQGBwcEAwMCAgQGBgQCAQAAAAECAgEBAw4aGBEJAwEAAAEAAAEBAAEBAAAAAAABAQEAAAAAAAAAAAAAAQEAAAAAAQEBAAAAAAEBAQEBAAAAAAAAAAAAAAAAAAAAAwYFAwMBAAABAQAAAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQECAQEBAQEBAQEAAQAAAAAAAAAAAAABAgQGCQcCAQIBAAABAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAAAAAAEBAQEDBQcKDhERDQYDAgEAAAEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQECAQEAAAABAgICAwYLEBUZGhYQCAQCAQAAAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQIBAgEAAAABAgMFCQ8UGRsZEw0HBAQBAAABAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAgICAQAAAQMEBgoOExYZGBQOCAUGCA=="], ["K", "BAcLCgcDAQAAAAICAQAAAAAAAwQBAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIBAAAAAAAAAAAOIjArHw8FAAAAAQAAAAADAwEDAwAAAAAAAAAAAQAAAAAAAAAAAgQDAgAAAAAAAAACAwMCAgICAgECBAIAAAAAAAABAR8+TT0xJhIEBw8YFQwEAAIHDhcbFA4MBwQHCQcHCAMBCw4JBwkVHBkQBAAAAAIICAYHCAkICA8WFg8FAgUQFxgTCwkNMFRePzlAJg8XKDs2Iw0AAAwhNkA1KyUYDRgdEhIYDAklLR4WGS89OCUNAwAACBgWDhATFBIRIzQzIwgDECg8QjUdFx41U1YtMEs5JjI8PjwzHQkBES9ASUlIRzAcLzYfITEhH09cPjEvNzw7LhoLAQAPLC0iJyggHiQyPTsuFxEbM0lVTDUpKjZTUyosSkQ9T088PkMwGQUVOT9BUV9lTzVCQiQrRzs7cHtWSkk/Oj05LBYEABU/Rz5AOSQnODo3NzIpIyM0R1ZVSDgwPGd2VkVBP0diZExOVkgtCxg/NS1LZ3hzYEgtFCVPVFdwb1NYZVhOU1FEJQoDHE5jY1U8HCZGOSYsMzgxKCw1QUhJOSw9aHdZPSwzSWxuUE9VRiwNHEIxJERmfoN0Rh0JI1hkY2VdTl1xYlRWUkYnCwMdU25yXDoVI0w4HiY1QjosKzA4QUc6KzdTUioRDSNFampGPj8pFQshRTcpQV94fGtAGwopYWddVU9LWmlaSkM7LxoHABlPZ2dVNxQhSDkkLDlEPTAzOj9FRz0xNUlCFQABFjZdZEtDOxsMHz1aT0NSZHBnUT4rGTRkXUpKSUZQWlRKQTMgEAQAF0hWUEc4IilAQDxCQjw7OzY3P0dMRzsuPzkPAAELIUVVTkg6FQ03WGpiWGJnYUkxOTonOFhFMT1BOjxESUlCLxYIAQATOT0zNDMtLDFATlJFKzE/MCk0QElIPRgfHAgAAQQNIS0vKyEJDTlPT0VAUlVDKxkiJhkeLCAUHiEaGyEqLywdCQIAAAkaGhMYGhcUFCAtMScUGCIYERUbISMeBwYGBAMCAAEHDREPCgIKKjMrISA0NiMTCA0QCQgKBgMICAMDBw8VFQ4CAAAAAQQDAQQGBAEABg0QDAMFCQYCAAEDBQYCAAIFBAEBAQEDBAMDAgUMDgwJCQ4PCQQCAwQFBAMCAwQEAAABAwUHBgMBAAAAAAEDAgEAAAABAwMCAAEDAgIBAQIDBgAAAQUEAQEBAAAAAAEBAQAAAAAAAAAAAAAAAAICAAECAgIBAAAAAAECAwEAAAAAAQMBAAAAAAAAAAAAAAEBAgICAgMFAQACAwMCAQAAAAABAQAAAAABAAACAgEBAQAAAQEAAAAAAQICAgIDAgEAAQEAAAAAAAAAAAAAAAAAAAAAAQICAQECAwQBAAAAAAAAAAAAAAAAAQAAAAAAAQEBAQEBAAAAAAAAAAAAAQIBAQEAAAABAQAAAAAAAAACAQABAQAAAAAAAQEBAQECBAEAAgICAgEBAgICAQABAQAAAQEBAAAAAAEBAgEBAAAAAAAAAAEBAgIBAAABAQICAgIBAQQDAAECAQAAAAABAQAAAQIDAQQICwwMCAYLDQsFAAAAAAAFAwAAAAAAAAUJBgQCAQEAAAAAAAQJCwcAAAEGCQgKCwcEAwEAAAABAQEAAQEBAAACAwQPIS0pKCkiHigrJRkLBAYQGR4ZDwUBAgoWISYhHhwRBwYMFRINFyElHhAIChsnKy0sJh8XDAEDCRANAwABAQEAAQIDBA=="], ["R", "CBUgIBsTCQICAgAAAAAAAAABAQAAAAAAAAAABAMAAAIBAgMFCAoLDQgBAQMCAgMCAgMCAQAAAAEAAQQCAAECAAAAAQEcSGhnWD0cAwAAAAEDAgEDBAMDAgAAAAAAAAACAgEBAQAAAAwcKC8vHgcCAwICBQUEBgUBAAAAAAAAAAAAAAAAAAABAidVbltQSCwTDBAZHBkOBQMIEhwiHhsYEgsMDQwOEg4LExUQGy9BTEk1FwkCAgsbJCgoIRUQERYZFxAGDhgMBxQUDBEVKUpOIiI+Oi0lLD5BNiEOAw0nP01HQ0IzIiIiGR8tIx41Oy0xP1NeW0ouEgECFTVNWlRFLycsNj07LBQmPyMYNzUgLDMnS1QrKUNFQkNDQEJAMh4GETJGUVJXYFI+PDQcJkI8OFVbRkRNU1xrYEEbAQAOKEljWkQpJTI7Qks/JT1dPzRXTzBEUiVQYkM6REZLXFhBQkpCLAoTOUNGT19xbFtQOxgmT1NTaGhRUFdUWnBpSR8AAAQROFtPNRkcND1FV080UHNZTWhaOFduJ1dtTz04NUBmbldYXlA0DBU9PTlGW3N+eFYwDSBUZmlmWkhOXWRnZFhBHAAAAAUnSz8mDBg8TFdoX0BagGxbYU42YYUpVmZAKSEjN2dxUk1RQikJGUM9M0JZc4F9WjAKH1hublxMRVFjbGlYTEAdAAAAASJEOiEIIlZZVGVeQWCKclpXRjViiClLTRsEBxQvXmA2KSgeEQciTUQ2RlxydWtaOxAjXmtiTUNIWGhnXU5IRCEBAAEGJkY9Jgw0eWA+UU85YY9rS09CNF13JDw6DgAACiBIUz81LhsRGTtjWUlTYGtfS0c5Gy1cXlA+OD9QXVRHPT08HQAAAQYhPTUgCS9wYEVSUD5fglc2PzkvUGEbKikLAAADECxASEc8IBYsTWtiU1daWUIqKysgL0xGNywoLjtEOCwpKysVAAABBBgsJhYEHk5SS1FLPVFjOx8rKiQ8Rg0TFAYAAAAFER0nKSMSDyQ4RT0zODgwIRIREhAYIx8WEREWHB8ZExIUFAkAAAEDDRcTCwINJCssLCggKC8bDRMTER0iBAQGAwIBAAEBBQsNDAUGFB0fGRQaGRELBwMBAwUGBQMBAgYHBwUDBAQEAQAAAQIFBwYDAQMIDREPCwkKCwYDBAQECAoCAQMDAwMDAwEBAgMCAQEFBwcFBAYHBQYHAwAAAQEDBAEBAwMCAQEAAQEBAAAAAAECAQEBAQIEBAMCAgICAQEBAQECBAEAAwQEAwQEAQAAAAAAAAAAAAAAAAEBAwUCAAAAAQMEAgIDAgEBAQAAAQAAAAAAAAAAAAEBAQAAAAAAAAAAAAAAAAEBAgIFBQQDAwMBAAAAAAAAAAIFBAMDAgEAAAAAAgMDAwMDBAQDAwICAgEBAAABAQEBAQEBAQEBAQEBAQEBAQAAAAAAAQEBAAAAAAEBAAAAAAAAAAAAAAIBAQIBAAAAAAAAAgICAgMDAwMCAgEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQAAAAAAAQMECAkJCQcFBggIBgMCAgMCAAECBQcGCAkGAwEAAQEBAgICAgIBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQAAAAABChgmLS0oHRggJyogEgoJDwwDBAoQGCApLCAQAwABAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAAAAAAEXNUxLRT0yMEJKQzcpGBUoIg4SHigyPUVHOygPAgEBAQEAAAEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEAAAAAAQ=="]]};
 function visWorker(){if(VIS.w)return VIS.w;const s=document.scripts[0].textContent,i=s.indexOf('const CargoVision=(()=>{'),j=s.indexOf('return{tints,gray,analyze,analyzeGrid,analyzeTint,hintP,hasHighlight}})();');
- const src=s.slice(i,j)+'return{tints,gray,analyze,analyzeGrid,analyzeTint,hintP,hasHighlight}})();\n'+WSRC;
+ const src=s.slice(i,j)+'return{tints,gray,analyze,analyzeGrid,analyzeTint,hintP,hasHighlight}})();\n'+TGSRC+WSRC;
  const w=new Worker(URL.createObjectURL(new Blob([src],{type:'text/javascript'})));w.onmessage=onVisMsg;w.onerror=e=>logEv('worker-ошибка',{m:e.message});VIS.w=w;return w}
+/* ===== Ящики торговца: карта, подписи, приоритет ===== */
+// буква — подпись в игре; короткое имя для клетки; c — цвет рамки; w — вес для очереди (моя оценка, уточняется по журналу)
+const LBL={Z:['Загадочный груз','Груз','',1],N:['Необычный таинственный груз','Груз','g',1.5],R:['Редкий таинственный груз','Груз','b',2.5],K:['Редкие коллекционные предметы','Колл.','b',2.5],
+ L:['Коллекционные предметы','Колл.','',2],M:['Военные предметы','Воен.','',1.5],H:['Домашняя утварь','Дом','',1.2],D:['Детали компьютеров','ПК','',1.2],S:['Медицинские предметы','Мед.','',1.2],V:['Электроника','Электр.','',1.2],
+ E:['Энергопредметы','Энерго','',0.4],I:['Инструменты','Инстр.','',0.4],P:['Бумага','Бумага','',0.4],B:['Стройматериалы','Строй','',0.4],F:['Горючие предметы','Горюч.','',0.4],X:['Другое','Другое','',0.6]};
+const TGS={map:new Map(),cand:new Map(),shift:0,rows:10,bad:0,cur:[],hot:null,sel:null,sig:'',seenAt:0};
+let OWNLB=jget('abiuho-labels',[]).filter(x=>Array.isArray(x)&&LBL[x[0]]&&typeof x[1]==='string'&&unb64(x[1]).length===1360);
+function lblSend(){if(VIS.w)VIS.w.postMessage({cmd:'lbl',hard:LBT.hard.concat(OWNLB),soft:LBT.soft})}
+function tgClear(){TGS.map.clear();TGS.cand.clear();TGS.shift=0;TGS.bad=0;TGS.cur.length=0;TGS.hot=TGS.sel=null}
+const boxSize=b=>normSize(b.w+'x'+b.h);
+const hits=(a,b)=>a.c<b.c+b.w&&b.c<a.c+a.w&&a.row<b.row+b.h&&b.row<a.row+a.h;
+// новый кадр: сдвигаем видимую часть на прокрутку и складываем ящики в общую карту
+function tgFrame(m){const g=m.grid;if(!g)return;TGS.seenAt=performance.now();const at=toSamp(m.ts);
+ const place=s=>g.boxes.map(b=>({...b,row:b.r+s}));const all=[...TGS.map.values()];
+ const rate=s=>{let ok=0,bad=0;for(const b of place(s)){const o=TGS.map.get(b.c+','+b.row);if(o&&o.w===b.w&&o.h===b.h&&(!o.k||!b.k||o.k===b.k))ok++;else if(all.some(q=>hits(q,b)))bad++}return{s,ok,bad,v:ok-bad}};
+ const est=g.sb?Math.round(g.sb.off+g.off):null,tries=est!=null?[est,est-1,est+1]:Array.from({length:60},(_,i)=>i);
+ let best=null;for(const s of tries){if(s<0)continue;const r=rate(s);if(!best||r.v>best.v||r.v===best.v&&s===TGS.shift&&est==null)best=r}if(!best)return;
+ // почти всё не совпадает несколько кадров подряд — это другой торговец
+ if(best.bad>=4&&best.bad>best.ok*2){if(++TGS.bad<6)return;tgClear();best={s:est||0,ok:0,bad:0}}else TGS.bad=0;
+ const P=place(best.s),moved=TGS.shift!==best.s;TGS.shift=best.s;TGS.rows=g.rows;
+ for(const b of P){const id=[b.c,b.row,b.w,b.h].join(),q=TGS.cand.get(id)||{n:0};q.n++;TGS.cand.set(id,q);const key=b.c+','+b.row,o=TGS.map.get(key);
+  if(o&&o.w===b.w&&o.h===b.h){o.n=q.n;o.miss=0;o.gone=false;if(b.k&&!o.named)o.k=b.k;if(!o.k&&b.lb)o.lb=b.lb;continue}
+  if(q.n<2)continue;const clash=[...TGS.map.entries()].filter(([,x])=>hits(x,b));if(clash.some(([,x])=>x.n>=q.n||x.res))continue;for(const[k]of clash)TGS.map.delete(k);
+  TGS.map.set(key,{key,c:b.c,row:b.row,w:b.w,h:b.h,k:b.k,lb:b.lb,n:q.n,miss:0,res:null})}
+ // ящика давно нет на его месте — куплен
+ for(const o of TGS.map.values())if(o.row>=best.s&&o.row+o.h<=best.s+g.rows&&!P.some(b=>b.c===o.c&&b.row===o.row)&&!pick){if(++o.miss>30)o.gone=true}
+ const c=m.cur;let key=null;if(c){const x=c.cx,y=c.cy+best.s;for(const o of TGS.map.values())if(x>=o.c&&x<o.c+o.w&&y>=o.row&&y<o.row+o.h)key=o.key}
+ if(c){TGS.cur.push({at,key});while(TGS.cur.length>60)TGS.cur.shift()}
+ TGS.hot=key;tgRank();renderGrid(moved)}
+// над каким ящиком был курсор в момент звука «взял»
+function boxAt(on,sr){const L=TGS.cur.filter(x=>x.at>=on-0.6*sr&&x.at<=on+0.2*sr);if(!L.length)return null;L.sort((a,b)=>Math.abs(a.at-on)-Math.abs(b.at-on));return L[0].key}
+// приоритет до звука: бывают ли красные такого размера и что написано на ящике
+function sizeReds(k){let r=0,n=0;for(const G of GROUPS)for(const x of G.items)if(x.ns===k){n++;if(x.t==='M')r++}return n?r/n:0}
+function prior(b){const k=boxSize(b),J=JOURNAL.filter(j=>j.lb===b.k&&j.s===k);if(b.k&&J.length>=LEARN_MIN)return{v:J.filter(j=>j.tier==='M').length/J.length,real:true};
+ return{v:sizeReds(k)*(b.k?LBL[b.k][3]:1)}}
+function tgRank(){const L=[...TGS.map.values()];for(const b of L){const p=prior(b);b.pv=p.v;b.real=p.real;b.rank=0}
+ L.filter(b=>!b.res&&!b.gone&&b.pv>0).sort((a,b)=>b.pv-a.pv||a.row-b.row||a.c-b.c).forEach((b,i)=>b.rank=i+1)}
+function tgAssign(it,key){const b=TGS.map.get(key);if(!b)return;it.tg=key;it.label=b.k;it.size={w:b.w,h:b.h,P:0,box:null,shot:null,conf:1,how:'grid'};
+ const el=it.node&&it.node.querySelector('.ttl');if(el)el.innerHTML=itemTitle(it);
+ if(!b.res||verdict(it).c!=='q'||verdict(b.res).c==='q'){if(b.res&&b.res!==it)b.res.over=true;b.res=it}tgRank()}
+// «взял»: ящик известен сразу, итог — после «положил»
+function tgAssignPending(it,key){const b=TGS.map.get(key);if(!b)return;it.tg=key;it.label=b.k;it.size={w:b.w,h:b.h,P:0,box:null,shot:null,conf:1,how:'grid'};TGS.sel=key}
+function lblLearn(key,k){const b=TGS.map.get(key);if(!b||!LBL[k])return;if(b.lb){OWNLB.unshift([k,b64(b.lb)]);OWNLB.length=Math.min(OWNLB.length,40);try{localStorage.setItem('abiuho-labels',JSON.stringify(OWNLB))}catch(e){}lblSend()}b.k=k;b.named=true;tgRank();renderGrid(false)}
 /* ===== Окно торговца ===== */
-const TR={pos:[],neg:[],score:null,tm:0,on:false};const TR_TH=0.5,TR_HOLD=1500;
+const TR={pos:[],neg:[],score:null,tm:0,on:false,auto:false};const TR_TH=0.5,TR_HOLD=1500;
 try{const d=JSON.parse(localStorage.getItem('abiuho-trader')||'null');if(d)for(const k of['pos','neg'])TR[k]=(d[k]||[]).map(unb64).filter(u=>u.length===5184)}catch(e){}
 function trSave(){try{localStorage.setItem('abiuho-trader',JSON.stringify({pos:TR.pos.map(b64),neg:TR.neg.map(b64)}))}catch(e){}trSend()}
 function trSend(){TR.score=null;TR.on=false;clearTimeout(TR.tm);TR.tm=0;if(VIS.w)VIS.w.postMessage({cmd:'tr',pos:TR.pos,neg:TR.neg});renderTr()}
@@ -770,8 +890,8 @@ function trSend(){TR.score=null;TR.on=false;clearTimeout(TR.tm);TR.tm=0;if(VIS.w
 function trFrame(v){if(v==null)return;TR.score=v;const set_=on=>{if(on!==TR.on){TR.on=on;logEv(on?'у торговца':'ушёл от торговца',{score:TR.score});renderTr()}};
  if(v>=TR_TH){clearTimeout(TR.tm);TR.tm=0;set_(true)}else if(TR.on&&!TR.tm)TR.tm=setTimeout(()=>{TR.tm=0;set_(false)},TR_HOLD)}
 // пока окно торговца не запомнено или экрана не видно — слушаем всё
-function inTrader(){return!TR.pos.length||!VIS.on||TR.on}
-function trText(){return!S.ctx?'не слушаю':!TR.pos.length?'торговец не запомнен':!VIS.on?'экрана не видно':TR.on?'у торговца':'не у торговца'}
+function inTrader(){return!TR.pos.length&&!TR.auto||!VIS.on||TR.on}
+function trText(){return!S.ctx?'не слушаю':!TR.pos.length&&!TR.auto?'торговца пока не видно':!VIS.on?'экрана не видно':TR.on?'у торговца':'не у торговца'}
 let snapId=0;function trSnap(){return new Promise(ok=>{if(!VIS.on||!VIS.w)return ok(null);const id=++snapId;DBGW.set('s'+id,{ok});VIS.w.postMessage({cmd:'snap',id});setTimeout(()=>{if(DBGW.delete('s'+id))ok(null)},4000)})}
 // «Запомнить окно торговца» / «Это не торговец»
 async function trLearn(neg){const m=await trSnap();if(!m||!m.sig){status('Сначала «Слушать игру» и выбери окно игры');return false}
@@ -786,10 +906,10 @@ function onVisMsg(e){const m=e.data;
  if(m.type==='dbg'){const q=DBGW.get(m.id);DBGW.delete(m.id);if(q)q.ok(m.blob);return}
  if(m.type==='tr'){trFrame(m.tr);return}
  if(m.type==='snap'){const q=DBGW.get('s'+m.id);DBGW.delete('s'+m.id);if(q)q.ok(m);return}
- VIS.busy=false;if(m.err)logEv('кадр-ошибка',{m:m.err});trFrame(m.tr);if(!m.hl)return;const at=toSamp(m.ts);
+ VIS.busy=false;if(m.err)logEv('кадр-ошибка',{m:m.err});if(m.auto)TR.auto=true;trFrame(m.tr);tgFrame(m);if(!m.hl)return;const at=toSamp(m.ts);
  if(at-VIS.lastHl>0.6*VIS.sr)logEv('подсветка началась');VIS.lastHl=at;
  if(m.r)m.r.shot=m.shot||null;VIS.hl.push({at,r:m.r});while(VIS.hl.length>80)VIS.hl.shift()}
-function visStart(stream){visStop();const vt=stream.getVideoTracks()[0];if(!vt||!set.vis)return;VIS.on=true;const w=visWorker();w.postMessage({cmd:'reset'});trSend();
+function visStart(stream){visStop();const vt=stream.getVideoTracks()[0];if(!vt||!set.vis)return;VIS.on=true;const w=visWorker();w.postMessage({cmd:'reset'});lblSend();trSend();
  // кадр отдаём в поток не чаще раза в 0,15 с и только если он свободен — иначе пропускаем (без очереди и задержек)
  const send=(fr,tsMs)=>{const now=performance.now();if(!VIS.busy&&now-VIS.lastSent>=150&&set.vis){VIS.busy=true;VIS.lastSent=now;w.postMessage({frame:fr,ts:tsMs},[fr])}else fr.close();
   if(VIS.busy&&now-VIS.lastSent>2000)VIS.busy=false};
@@ -810,7 +930,7 @@ function bestRes(rs){if(!rs.length)return null;const cnt={};for(const r of rs){c
  const r=rs.filter(x=>sizeKey(x)===top).sort((a,b)=>b.conf-a.conf)[0];r.seen=cnt[top];r.frames=rs.length;
  VIS.Phist.push(r.P);if(VIS.Phist.length>15)VIS.Phist.shift();const s=[...VIS.Phist].sort((a,b)=>a-b);if(s.length>=3&&VIS.P!==s[s.length>>1]){VIS.P=s[s.length>>1];VIS.w&&VIS.w.postMessage({cmd:'P',P:VIS.P})}return r}
 // дописать размер в строку ленты
-function applySize(it,a,b){if(!set.vis)return;const br=dragSize(a,b);if(!br)return;it.size=br;
+function applySize(it,a,b){if(it.tg){tgAssign(it,it.tg);return}if(!set.vis)return;const br=dragSize(a,b);if(!br)return;it.size=br;
  const el=it.node&&it.node.querySelector('.ttl');if(el)el.innerHTML=itemTitle(it);putShot(it.node&&it.node.querySelector('.shot'),br.shot)}
 function visTrig(){}
 // Кадры для разбора: поток держит ~4,5 с кадров; у каждого звука через 1,6 с после него
@@ -832,7 +952,7 @@ function alertRed(it){const d=verdict(it);if(d.c!=='yes'&&d.c!=='may')return;doc
 // Пара «взял → положил» одного ящика. «Положил» без «взял» (перенос кнопкой F) не считается.
 let pick=null,lastGood=0,lastSnd=null;
 function simGK(f,g,kind){let b=0;for(const e of CAT)if(e.g===g&&e.kind===kind){const s=sim(f,e.feat);if(s>b)b=s}return b}
-function sameCargo(a,b){if(!a||!b)return true;const[ax,ay,aw,ah]=a.box,[bx,by,bw,bh]=b.box;const ix=Math.max(0,Math.min(ax+aw,bx+bw)-Math.max(ax,bx)),iy=Math.max(0,Math.min(ay+ah,by+bh)-Math.max(ay,by));return ix*iy>0.5*Math.min(aw*ah,bw*bh)}
+function sameCargo(a,b){if(!a||!b||!a.box||!b.box)return true;const[ax,ay,aw,ah]=a.box,[bx,by,bw,bh]=b.box;const ix=Math.max(0,Math.min(ax+aw,bx+bw)-Math.max(ax,bx)),iy=Math.max(0,Math.min(ay+ah,by+bh)-Math.max(ay,by));return ix*iy>0.5*Math.min(aw*ah,bw*bh)}
 // «положил» дополняет строку «взял»: среднее сходство по двум звукам, одна строка, один итог
 function mergePut(pk,put){const pm=new Map(put.matches.map(x=>[x.g,x.s]));pk.single=pk.matches;
  pk.matches=pk.matches.map(x=>({g:x.g,kind:x.kind,s:pm.has(x.g)?(x.s+pm.get(x.g))/2:x.s*0.5})).sort((a,b)=>b.s-a.s);
@@ -858,7 +978,7 @@ function onLive(seg,sr,on){if(!set.rec&&!pick&&!inTrader()){logEv('звук не
   if(good&&top0.g===f.matches[0].g&&!f.putSeg){mergePut(f,it);showNow(f);alertRed(f)}return}
  if(!good){if(now-lastGood>2500)showNow(it);return}
  lastGood=now;const kind=top0.kind;it.kind=kind;
- if(kind==='взять'||kind===null){pick={at:now,it,on:ON};const t=it.node&&it.node.querySelector('.meta');if(t&&kind)t.textContent+=' · «взял»';showNow(it);return}
+ if(kind==='взять'||kind===null){pick={at:now,it,on:ON};{const k=boxAt(ON,SR);if(k)tgAssignPending(it,k)}const t=it.node&&it.node.querySelector('.meta');if(t&&kind)t.textContent+=' · «взял»';showNow(it);return}
  // «положил» без «взял»: если ящик перед этим тянули мышкой (была подсветка) — «взял» просто не расслышали, считаем.
  // Если подсветки не было — это перенос кнопкой F, пропускаем.
  const a=Math.max(ON-Math.round(4*SR),lastFin.on),b=ON+Math.round(0.1*SR);
@@ -866,8 +986,8 @@ function onLive(seg,sr,on){if(!set.rec&&!pick&&!inTrader()){logEv('звук не
  logEv('положил без взял — пропуск');const t=it.node&&it.node.querySelector('.meta');if(t)t.textContent+=' · «положил» без «взял» — пропущен';showNow(it)}
 // итог действия: размер по кадрам, пока тянули, затем экран и голос
 let lastFin={it:null,at:0,on:-1e12};const DONE=[];let doneNo=0;   // проверенные ящики — список в окне поверх игры
-function clearDone(){DONE.length=0;doneNo=0;pick=null;lastNow=null;renderPip(null)}
-function finish(it,a,b){if(VIS.w)VIS.w.postMessage({cmd:'resync'});logEv('итог',{g:it.matches[0].g,a,b,hl:VIS.hl.filter(x=>x.at>=a&&x.at<=b).map(x=>x.r?x.r.w+'x'+x.r.h:'-')});applySize(it,a,b);lastFin={it,at:Date.now(),on:b};if(!it.no)it.no=++doneNo;DONE.unshift(it);if(DONE.length>30)DONE.pop();showNow(it);alertRed(it)}
+function clearDone(){DONE.length=0;doneNo=0;tgClear();pick=null;lastNow=null;renderPip(null)}
+function finish(it,a,b){if(VIS.w)VIS.w.postMessage({cmd:'resync'});logEv('итог',{g:it.matches[0].g,a,b,hl:VIS.hl.filter(x=>x.at>=a&&x.at<=b).map(x=>x.r?x.r.w+'x'+x.r.h:'-')});applySize(it,a,b);lastFin={it,last:it,at:Date.now(),on:b};if(!it.no)it.no=++doneNo;DONE.unshift(it);if(DONE.length>30)DONE.pop();showNow(it);alertRed(it)}
 // второй звук не разобрать (наложился, тихий) или его не было — итог по «взял»
 function releaseOnly(pk,put,how){pk.merged=true;if(put){RECENT=RECENT.filter(x=>x!==put);put.node&&put.node.remove()}
  const t=pk.node&&pk.node.querySelector('.meta');if(t)t.textContent=t.textContent.replace(' · «взял»','')+' · «взял» → '+how;const el=pk.node&&pk.node.querySelector('.ttl');if(el)el.innerHTML=itemTitle(pk)}
@@ -925,7 +1045,7 @@ $('bDisp').onclick=()=>askMap(startCapture);
 // нажали «выпал» у предмета: одна отметка на ящик; повторное нажатие снимает, другой предмет — заменяет
 function markFound(it,name){const V=view(it);if(!V)return;const x=V.G.items.find(y=>y.n===name);if(!x)return;
  JOURNAL=JOURNAL.filter(j=>j.id!==it.id);if(it.found===name)it.found=null;
- else{it.found=name;JOURNAL.unshift({id:it.id,t:Date.now(),map:set.map,mode:set.mode,g:V.G.g,s:x.ns,n:x.n,tier:x.t,p:x.p})}
+ else{it.found=name;JOURNAL.unshift({id:it.id,t:Date.now(),map:set.map,mode:set.mode,g:V.G.g,s:x.ns,n:x.n,tier:x.t,p:x.p,lb:it.label||''})}
  if(JOURNAL.length>5000)JOURNAL.length=5000;saveJ();renderJ();showNow(it)}
 const money=n=>n>=1e6?(n/1e6).toFixed(1).replace('.',',')+' млн ₭':n>=1e3?Math.round(n/1e3)+' тыс. ₭':n+' ₭';
 function renderJ(){const jm=$('jMap').value,jt=$('jTier').value,all=JOURNAL.filter(j=>!jm||j.map===jm),red=all.filter(j=>j.tier==='M'),day=Date.now()-864e5;
@@ -937,7 +1057,7 @@ $('jList').addEventListener('click',e=>{const b=e.target.closest('button[data-j]
 $('bJExp').onclick=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify({app:'abi-uho-journal',v:1,journal:JOURNAL,items:OWN})],{type:'application/json'}));a.download='abi-uho-nahodki.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),5000)};
 $('fJ').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;try{const d=JSON.parse(await f.text());if(!d||d.app!=='abi-uho-journal')throw new Error('это не файл находок');
  let n=0,k=0;const ids=new Set(JOURNAL.map(j=>j.id));
- for(const j of d.journal||[])if(j&&j.g>=1&&j.g<=38&&typeof j.n==='string'&&TIER[j.tier]&&!ids.has(String(j.id))){JOURNAL.push({id:String(j.id).slice(0,40),t:+j.t||Date.now(),map:String(j.map||''),mode:String(j.mode||''),g:+j.g,s:String(j.s||'').slice(0,5),n:j.n.slice(0,80),tier:j.tier,p:+j.p||0});n++}
+ for(const j of d.journal||[])if(j&&j.g>=1&&j.g<=38&&typeof j.n==='string'&&TIER[j.tier]&&!ids.has(String(j.id))){JOURNAL.push({id:String(j.id).slice(0,40),t:+j.t||Date.now(),map:String(j.map||''),mode:String(j.mode||''),g:+j.g,s:String(j.s||'').slice(0,5),n:j.n.slice(0,80),tier:j.tier,p:+j.p||0,lb:LBL[j.lb]?j.lb:''});n++}
  for(const x of d.items||[])if(okItem(x)&&!OWN.some(y=>y.g===x.g&&y.n===x.n)){OWN.push({g:+x.g,n:x.n.slice(0,80),s:x.s,t:x.t,p:+x.p||0});k++}
  JOURNAL.sort((a,b)=>b.t-a.t);saveJ();saveOwn();status('Добавлено находок: '+n+', предметов: '+k,true)}catch(err){status('Не удалось прочитать файл: '+err.message)}};
 /* ===== Свои предметы ===== */
@@ -957,7 +1077,7 @@ $('bDev').onclick=async()=>{try{if(!$('dev').value){const t=await navigator.medi
 $('bStop').onclick=stop;
 /* ===== Окно поверх игры (Document Picture-in-Picture, Chrome 116+) ===== */
 let PIP=null;
-const VC={yes:'#e23b3b',may:'#e08a1e',mayno:'#3f86e0',no:'#3fa65a',q:'#6b7162'};
+const VC={yes:'#e23b3b',may:'#e08a1e',mayno:'#b7a02c',no:'#59614f',q:'#6b7162'};
 const PIP_CSS=`*{box-sizing:border-box}body{margin:0;background:#151813;color:#e9ebe1;font:14px/1.35 Rubik,system-ui,sans-serif;height:100vh;display:flex;flex-direction:column}
 #p{--c:#6b7162;padding:8px 12px;flex:none;border-left:8px solid var(--c);background:color-mix(in srgb,var(--c) 22%,#151813)}
 ${Object.entries(VC).map(([k,v])=>'.'+k+'{--c:'+v+'!important}').join('')}
@@ -968,22 +1088,52 @@ ${Object.entries(VC).map(([k,v])=>'.'+k+'{--c:'+v+'!important}').join('')}
 #l li{display:grid;grid-template-columns:26px 40px minmax(0,1fr) auto;gap:8px;align-items:center;padding:4px 12px 4px 4px;border-left:8px solid var(--c);border-bottom:1px solid #2e3428}
 #l .no_{color:#9aa08c;text-align:right}#l canvas{width:40px;height:30px;object-fit:contain;background:#0e100c;border-radius:3px}
 #l .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#l .t small{color:#9aa08c}#l b{white-space:nowrap}
+#g{position:relative;flex:1;min-height:0;overflow:auto;margin:6px;background:#0d0f0b;scrollbar-width:thin}#g[hidden],#l[hidden],#k[hidden]{display:none}
+#gi{position:relative;width:100%}
+#g .b{position:absolute;border:1.5px solid #454b3f;background:#1c2019;border-radius:3px;overflow:hidden;font-size:10.5px;line-height:1.15;padding:2px 3px;cursor:pointer;color:#c9cdc0}
+#g .b.lg{border-color:#46b061}#g .b.lb{border-color:#4c8df0}#g .b.lg>i{color:#7fdc97}#g .b.lb>i{color:#8db7ff}
+#g .b i{font-style:normal;white-space:nowrap}#g .b.skip{opacity:.42}#g .b.gone{opacity:.15}
+#g .b u{position:absolute;right:3px;bottom:2px;text-decoration:none;font-weight:700;font-size:13px;color:#e9ebe1}
+#g .b.r1 u{background:#c7bd7d;color:#151813;border-radius:8px;padding:0 5px}
+#g .b.done{background:color-mix(in srgb,var(--c) 55%,#151813);border-color:var(--c)}#g .b.done u{color:#fff}
+#g .b.no.done{background:#191c16;border-color:#3a4034}#g .b.no.done u{color:#8d937f;font-size:11px}
+#g .b.hot{outline:2px solid #fff;outline-offset:-2px;z-index:2}#g .b.sel{outline:2px solid #c7bd7d;outline-offset:-2px;z-index:3}
+#g .b canvas{width:100%;max-width:68px;display:block;opacity:.9}
+#vw{position:absolute;left:0;right:0;border-left:2px solid #c7bd7d88;pointer-events:none}
+#k{display:flex;gap:6px;align-items:center;padding:4px 8px;font-size:12px;flex:none}#k select{flex:1;min-width:0;font:inherit;background:#262b22;color:#e9ebe1;border:1px solid #3a4133;border-radius:6px;padding:3px}
 #f{display:flex;gap:6px;padding:6px 8px;flex:none;border-top:1px solid #2e3428}#f button{flex:1;font:inherit;font-size:12px;color:#e9ebe1;background:#262b22;border:1px solid #3a4133;border-radius:6px;padding:5px 6px;cursor:pointer}#f button.hot{background:#c7bd7d;color:#151813}#f button[hidden]{display:none}`;
 // quiet — открываем сами после выбора окна; false, если браузер не разрешил без нажатия
 async function openPip(quiet){if(!('documentPictureInPicture' in window)){if(quiet!==true)status('Окно поверх игры есть только в Chrome 116 и новее');return quiet===true}
- try{if(PIP){PIP.focus();return true}const w=await documentPictureInPicture.requestWindow({width:340,height:400});const d=w.document,st=d.createElement('style');st.textContent=PIP_CSS;d.head.append(st);
-  d.title='Ухо торговца';d.body.innerHTML='<div id="p"></div><ul id="l"></ul><div id="f"><button data-a="learn">Запомнить окно торговца</button><button data-a="not">Это не торговец</button><button data-a="clear">Очистить</button></div>';
+ try{if(PIP){PIP.focus();return true}const w=await documentPictureInPicture.requestWindow({width:380,height:560});const d=w.document,st=d.createElement('style');st.textContent=PIP_CSS;d.head.append(st);
+  d.title='Ухо торговца';d.body.innerHTML='<div id="p"></div><div id="g" hidden><div id="gi"></div></div><ul id="l"></ul><div id="k" hidden><span></span><select aria-label="Подпись ящика"></select></div><div id="f"><button data-a="learn">Запомнить окно торговца</button><button data-a="not">Это не торговец</button><button data-a="clear">Очистить</button></div>';
   d.getElementById('f').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;const a=b.dataset.a;if(a==='clear')clearDone();else trLearn(a==='not')});
-  PIP=w;w.addEventListener('pagehide',()=>{PIP=null});renderPip(lastNow);return true}catch(e){if(quiet!==true)status('Не удалось открыть окно: '+e.message);return false}}
-function renderPip(it){if(!PIP)return;const D=PIP.document,el=D.getElementById('p');if(!el)return;
- const live=TR.on&&S.ctx,btn=a=>D.querySelector('#f [data-a='+a+']');btn('learn').hidden=!S.ctx||live;btn('learn').className=S.ctx&&!TR.pos.length?'hot':'';btn('not').hidden=!live;
- let c='q',big='Жду ящик',pc='',note='наведи, дождись цены и потяни';
+  d.getElementById('g').addEventListener('click',e=>{const el=e.target.closest('.b');if(!el)return;const key=el.dataset.k,L=lastFin.last;
+   // итог без места (курсор не увидели) — клик по клетке ставит его туда
+   if(L&&!L.tg&&Date.now()-lastFin.at<20000){tgAssign(L,key);showNow(L)}TGS.sel=key;renderGrid(false,true)});
+  const ks=d.querySelector('#k select');ks.innerHTML='<option value="">Что написано на ящике?</option>'+Object.entries(LBL).map(([k,v])=>`<option value="${k}">${v[0]}</option>`).join('');ks.onchange=()=>{if(TGS.sel&&ks.value)lblLearn(TGS.sel,ks.value)};
+  PIP=w;TGS.sig='';w.addEventListener('pagehide',()=>{PIP=null});renderPip(lastNow);return true}catch(e){if(quiet!==true)status('Не удалось открыть окно: '+e.message);return false}}
+// карта ящиков в окне: рамка — подпись, число — очередь, заливка — итог по звуку
+function renderGrid(scroll,force){if(!PIP)return;const D=PIP.document,g=D.getElementById('g'),gi=D.getElementById('gi');if(!g)return;const L=[...TGS.map.values()];
+ g.hidden=!L.length;D.getElementById('l').hidden=!!L.length;const k=D.getElementById('k'),sb=TGS.sel&&TGS.map.get(TGS.sel);
+ k.hidden=!sb;if(sb){k.firstChild.textContent=boxSize(sb);const s=k.querySelector('select');if(D.activeElement!==s)s.value=sb.k||''}
+ if(!L.length){TGS.sig='';return}
+ const rows=Math.max(...L.map(b=>b.row+b.h)),cw=(g.clientWidth||360)/9;
+ const html=L.map(b=>{const d=b.res?verdict(b.res):null,q=b.k?LBL[b.k]:null,wait=pick&&pick.it.tg===b.key;
+  const cls=['b',q&&q[2]?'l'+q[2]:'',b.gone?'gone':'',d?'done '+d.c:'',!d&&!b.pv?'skip':'',!d&&b.rank&&b.rank<=3?'r1':'',b.key===TGS.hot||wait?'hot':'',b.key===TGS.sel?'sel':''].filter(Boolean).join(' ');
+  const u=wait?'…':d?(d.c==='no'?'нет':d.c==='q'?'?':d.pc):b.real?Math.round(b.pv*100)+'%':b.rank||'–';
+  return`<div class="${cls}" data-k="${b.key}" title="${esc((q?q[0]:'подпись не узнана')+' · '+boxSize(b))}" style="left:${b.c/9*100}%;width:calc(${b.w/9*100}% - 2px);top:${(b.row*cw).toFixed(1)}px;height:${(b.h*cw-2).toFixed(1)}px">${q?'<i>'+q[1]+'</i>':'<canvas></canvas>'}<u>${u}</u></div>`}).join('')+`<div id="vw" style="top:${(TGS.shift*cw).toFixed(1)}px;height:${(TGS.rows*cw).toFixed(1)}px"></div>`;
+ if(html!==TGS.sig||force){TGS.sig=html;gi.style.height=rows*cw+'px';gi.innerHTML=html;
+  for(const el of gi.querySelectorAll('canvas')){const b=TGS.map.get(el.parentNode.dataset.k);if(!b||!b.lb)continue;el.width=68;el.height=20;const c=el.getContext('2d'),im=c.createImageData(68,20);b.lb.forEach((v,i)=>{const q=Math.min(255,v*1.5);im.data[i*4]=im.data[i*4+1]=im.data[i*4+2]=q;im.data[i*4+3]=255});c.putImageData(im,0,0)}}
+ if(scroll)g.scrollTop=TGS.shift*cw}
+function renderPip(it){if(!PIP)return;renderGrid(false);const D=PIP.document,el=D.getElementById('p');if(!el)return;
+ const live=TR.on&&S.ctx,btn=a=>D.querySelector('#f [data-a='+a+']');btn('learn').hidden=!S.ctx||live;btn('learn').className=S.ctx&&!TR.pos.length&&!TR.auto?'hot':'';if(TR.auto)btn('learn').hidden=true;btn('not').hidden=!live;
+ const left=[...TGS.map.values()].filter(b=>b.rank).length;let c='q',big='Жду ящик',pc='',note=TGS.map.size?'ящиков: '+TGS.map.size+', стоит проверить: '+left+' · прокрути список вниз':'наведи, дождись цены и потяни';
  if(!CAT.length){big='Нет звуков';note='загрузи файл со звуками на странице'}
  else if(!S.ctx){big='Не слушаю';note='нажми «Слушать игру» на странице'}
- else if(!TR.pos.length&&!it){big='Открой торговца';note='и нажми «Запомнить окно торговца» — один раз'}
- else if(TR.pos.length&&VIS.on&&!TR.on){big='Не у торговца';note='открой окно торговца — начну слушать'}
+ else if(!TR.pos.length&&!TR.auto&&!it){big='Открой торговца';note='ящики появятся сами; если нет — «Запомнить окно торговца»'}
+ else if((TR.pos.length||TR.auto)&&VIS.on&&!TR.on){big='Не у торговца';note='открой окно торговца — начну слушать'}
  else if(it){if(it.kind&&!it.merged){if(it.kind==='взять'){big='Слышу…';note='отпусти ящик — покажу итог'}else{big='Потяни мышкой';note='перенос кнопкой F не считается'}}
-  else{const d=verdict(it);c=d.c;big=d.big;pc=d.pc;note=[it.no?'ящик '+it.no:'',d.V&&d.V.key,d.note].filter(Boolean).join(' · ')}}
+  else{const d=verdict(it);c=d.c;big=d.big;pc=d.pc;note=[it.tg?'':it.no?'ящик '+it.no+(TGS.map.size?' · нажми на его клетку':''):'',it.label?LBL[it.label][0]:'',d.V&&d.V.key,d.note].filter(Boolean).join(' · ')}}
  el.className=c;el.innerHTML=`<div class="m"><span class="${live?'on':''}">● ${trText()}</span><span>${set.map?mapName(set.map,set.mode):'карта не указана'}</span></div><div class="big"><span>${esc(big)}</span><b>${pc}</b></div><div class="s">${esc(note)}</div>`;
  const L=D.getElementById('l');L.innerHTML=DONE.map(x=>{const d=verdict(x);return`<li class="${d.c}"><span class="no_">${x.no}</span><canvas></canvas><span class="t">${d.big}${d.V&&d.V.key?' <small>'+d.V.key+'</small>':''}</span><b>${d.pc}</b></li>`}).join('');
  [...L.children].forEach((li,i)=>{const s=DONE[i].size&&DONE[i].size.shot,cv=li.querySelector('canvas');if(s){cv.width=s.width;cv.height=s.height;try{cv.getContext('2d').drawImage(s,0,0)}catch(e){}}})}
@@ -1001,7 +1151,7 @@ async function saveFrames(it){if(!it||!it.dbg){status(it&&set.vis&&VIS.on?'Ка�
 $('bDbg').onclick=()=>saveFrames(lastNow);
 
 
-window.ABI_TEST={attach,stop,get set(){return set},get vis(){return VIS},get PACK(){return PACK},get CAT(){return CAT},get RECENT(){return RECENT},Detector,features,match,unb64,view,verdict,showNow,markFound,addRecent,finish,listChance,openPip,get PIP(){return PIP},TR,trLearn,inTrader,DONE,clearDone,onLive,visWorker,get JOURNAL(){return JOURNAL},get OWN(){return OWN},GROUPS};
+window.ABI_TEST={attach,stop,get set(){return set},get vis(){return VIS},get PACK(){return PACK},get CAT(){return CAT},get RECENT(){return RECENT},Detector,features,match,unb64,view,verdict,showNow,markFound,addRecent,finish,listChance,openPip,get PIP(){return PIP},TR,TGS,TGSRC,LBT,LBL,tgFrame,tgAssign,boxAt,tgClear,prior,lblLearn,lblSend,renderPip,trLearn,inTrader,DONE,clearDone,onLive,visWorker,get JOURNAL(){return JOURNAL},get OWN(){return OWN},GROUPS};
 $('fAudio').onchange=async e=>{const files=[...e.target.files];e.target.value='';const dc=S.pctx||(S.pctx=new AudioContext());let n=0;
  for(const f of files){try{status('Режу: '+f.name);const buf=await dc.decodeAudioData(await f.arrayBuffer());const L=buf.length,a=buf.getChannelData(0),b=buf.numberOfChannels>1?buf.getChannelData(1):a;
   const det=new Detector(buf.sampleRate,()=>set,(seg,sr)=>{if(addRecent(seg,sr,f.name))n++});
