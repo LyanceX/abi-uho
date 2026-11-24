@@ -115,7 +115,7 @@ code{font-family:"JetBrains Mono",monospace;font-size:13px;background:#0e100c;pa
     <div id="nowSub">Нажми «Слушать игру», наведи на ящик у торговца, дождись цены и потяни его</div>
     <div id="nowAlt"></div>
     <canvas id="nowShot" class="shot" hidden></canvas>
-    <div class="row" style="margin-top:8px"><button class="sm" id="bDbg">Сохранить кадры последнего звука</button><span class="k">— если размер определился неверно, пришли этот файл</span></div>
+    <div class="row" style="margin-top:8px"><button class="sm" id="bDbg">Сохранить кадры этого звука</button><span class="k">— или кнопка «Кадры» у нужного звука в ленте ниже</span></div>
     <canvas id="nowSpec" class="spec" width="60" height="48"></canvas>
     <div id="nowItemsWrap" hidden>
       <div class="k" id="sizeLbl">Размер ящика</div>
@@ -495,7 +495,7 @@ function itemTitle(it){const top=it.matches[0];if(!CAT.length)return'<b>Новы
 function makeNode(it){const d=document.createElement('div');d.className='snd';d.dataset.id=it.id;
  const t=new Date(it.t).toLocaleTimeString('ru-RU');const top=it.matches[0];
  d.innerHTML=`<div class="row" style="gap:6px;flex-wrap:nowrap"><canvas class="spec" style="width:110px"></canvas><canvas class="shot" hidden></canvas></div><div><div class="ttl">${itemTitle(it)}</div><div class="meta">${t} · ${esc(it.src)}</div></div>
- <div class="act"><button class="sm" data-a="play">▶</button><select aria-label="Группа">${groupOpts(top?top.g:set.recG)}</select><button class="sm" data-a="save">В эталон</button><button class="sm" data-a="del" aria-label="Убрать">✕</button></div>`;
+ <div class="act"><button class="sm" data-a="play">▶</button><select aria-label="Группа">${groupOpts(top?top.g:set.recG)}</select><button class="sm" data-a="save">В эталон</button><button class="sm" data-a="frames">Кадры</button><button class="sm" data-a="del" aria-label="Убрать">✕</button></div>`;
  drawSpec(d.querySelector('.spec'),it.feat);putShot(d.querySelector('.shot'),it.size&&it.size.shot);it.node=d;return d}
 function refreshTitles(){for(const it of RECENT){if(it.merged)continue;it.matches=match(it.feat);const el=it.node&&it.node.querySelector('.ttl');if(el)el.innerHTML=itemTitle(it)}}
 function addRecent(seg,sr,src,size){const feat=features(seg,sr);if(feat.T<4)return null;
@@ -504,6 +504,7 @@ function addRecent(seg,sr,src,size){const feat=features(seg,sr);if(feat.T<4)retu
  while(RECENT.length>40){const o=RECENT.pop();o.node&&o.node.remove()}return it}
 $('recent').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;const row=b.closest('.snd');const it=RECENT.find(x=>x.id===row.dataset.id);if(!it)return;
  if(b.dataset.a==='play')play(it.seg,it.sr);
+ if(b.dataset.a==='frames')saveFrames(it);
  if(b.dataset.a==='del'){RECENT=RECENT.filter(x=>x!==it);row.remove()}
  if(b.dataset.a==='save'){const g=+row.querySelector('select').value;const e2=addRef(g,it.seg,it.sr);dbPut(e2);b.textContent='Сохранено';b.disabled=true;renderCat();refreshTitles()}});
 $('bClr').onclick=()=>{RECENT=[];$('recent').innerHTML='<div class="empty">Пусто.</div>'};
@@ -536,7 +537,7 @@ document.querySelectorAll('.impFile').forEach(el=>el.addEventListener('change',i
 /* ===== Размер ящика по экрану ===== */
 // Кадры берутся из той же трансляции экрана. Вся работа запускается из обработчика звука,
 // потому что таймеры во фоновой вкладке браузер замедляет, а звук — нет.
-const VIS={src:null,reader:null,latest:null,video:null,canvas:null,snaps:[],nextSnap:0,jobs:[],results:new Map(),Phist:[],P:0};
+const VIS={dbgMap:new Map(),src:null,reader:null,latest:null,video:null,canvas:null,snaps:[],nextSnap:0,jobs:[],results:new Map(),Phist:[],P:0};
 const MAXW=1600;
 function visStart(stream){visStop();const vt=stream.getVideoTracks()[0];if(!vt)return;
  if('MediaStreamTrackProcessor' in window){try{const rd=new MediaStreamTrackProcessor({track:vt}).readable.getReader();VIS.reader=rd;
@@ -551,7 +552,7 @@ function visFrame(){const s=VIS.latest||VIS.video;if(!s)return null;const sw=s.d
 function visTick(total,sr){if(!set.vis||(!VIS.latest&&!VIS.video))return;
  if(VIS.jobs.length){const j=VIS.jobs[0];if(total>=j.due[0]){j.due.shift();const img=visFrame();
    if(img){const bf=pickBefore(j.on,sr);const t1=CargoVision.tints(img);let r=null;if(bf)r=CargoVision.analyzeGrid(bf.g,CargoVision.gray(img),bf.t,t1,VIS.P||0);j.frames.push(img);j.bf=bf;if(r){r.shot=cropShot(r);j.res.push(r)}}
-   if(!j.due.length){VIS.jobs.shift();const br=bestRes(j.res);VIS.results.set(j.on,br);VIS.dbg={before:j.bf&&j.bf.img,after:j.frames,res:br,t:Date.now()};if(VIS.results.size>30)VIS.results.delete(VIS.results.keys().next().value)}}
+   if(!j.due.length){VIS.jobs.shift();const br=bestRes(j.res);VIS.results.set(j.on,br);VIS.dbgMap.set(j.on,dbgBlob(j.bf&&j.bf.img,j.frames,br));if(VIS.dbgMap.size>12)VIS.dbgMap.delete(VIS.dbgMap.keys().next().value);if(VIS.results.size>30)VIS.results.delete(VIS.results.keys().next().value)}}
   return}
  if(total>=VIS.nextSnap){VIS.nextSnap=total+Math.round(0.4*sr);const img=visFrame();if(img){VIS.snaps.push({at:total,t:CargoVision.tints(img),g:CargoVision.gray(img),img});if(VIS.snaps.length>3)VIS.snaps.shift()}}}
 function pickBefore(on,sr){let b=null;for(const s of VIS.snaps)if(s.at<on-0.12*sr)b=s;return b||VIS.snaps[0]||null}
@@ -598,7 +599,7 @@ function sameCargo(a,b){if(!a||!b)return true;const[ax,ay,aw,ah]=a.box,[bx,by,bw
 function mergeInto(it,prev){const pm=new Map(prev.matches.map(x=>[x.g,x.s]));it.single=it.matches;
  it.matches=it.matches.map(x=>({g:x.g,kind:x.kind,s:pm.has(x.g)?(x.s+pm.get(x.g))/2:x.s*0.5})).sort((a,b)=>b.s-a.s);
  if(!it.size)it.size=prev.size;it.merged=true;const t=it.node&&it.node.querySelector('.meta');if(t)t.textContent+=' · «положил», вместе с «взял»'}
-function onLive(seg,sr,on){const size=on!=null&&VIS.results.has(on)?VIS.results.get(on):null;sizeSel=null;const it=addRecent(seg,sr,'игра',size);if(!it)return;
+function onLive(seg,sr,on){const size=on!=null&&VIS.results.has(on)?VIS.results.get(on):null;sizeSel=null;const it=addRecent(seg,sr,'игра',size);if(!it)return;it.dbg=on!=null?VIS.dbgMap.get(on)||null:null;
  if(set.rec){const e2=addRef(set.recG,seg,sr);dbPut(e2);it.node.querySelector('[data-a=save]').textContent='Сохранено';it.node.querySelector('select').value=set.recG;
   status('Эталон записан в №'+set.recG,true);if(set.adv&&set.recG<38){set.recG++;$('recG').value=set.recG;saveSet()}renderCat();refreshTitles();return}
  const top0=it.matches[0],now=Date.now();
@@ -647,12 +648,16 @@ function renderPip(it){if(!PIP)return;const el=PIP.document.getElementById('p');
  <div class="s">${V.list.length?compo(V.list):esc(stText(V))}</div><div class="s">${stage(it)?stage(it)+' · ':''}совпадение ${pct(top.s)}%</div>
  <ul>${[...V.list].sort((a,b)=>b.p-a.p).slice(0,5).map(x=>`<li class="${x.t}"><span class="n">${esc(x.n)}</span><span class="z">${x.s}</span></li>`).join('')}</ul>`}
 $('bPip').onclick=openPip;
-// кадры последнего звука одной картинкой: «до» и два кадра «после» (с рамкой найденного ящика)
-$('bDbg').onclick=()=>{const d=VIS.dbg;if(!d||!d.after||!d.after.length){status('Пока нет кадров: включи «Слушать игру» (весь экран) и дёрни ящик');return}
- const fr=[d.before,...d.after].filter(Boolean),W=fr[0].width,H=fr[0].height,c=document.createElement('canvas');c.width=W;c.height=H*fr.length;const x=c.getContext('2d');
- fr.forEach((f,i)=>{x.putImageData(f,0,i*H);x.fillStyle='#000a';x.fillRect(0,i*H,420,44);x.fillStyle='#ffd84a';x.font='bold 28px sans-serif';x.fillText(i===0&&d.before?'ДО ЗВУКА':'ПОСЛЕ +'+(i===(d.before?1:0)?'0,12':'0,3')+' с',12,i*H+32)});
- if(d.res){x.strokeStyle='#ffd84a';x.lineWidth=3;const[bx,by,bw,bh]=d.res.box;for(let i=d.before?1:0;i<fr.length;i++)x.strokeRect(bx,by+i*H,bw,bh)}
- c.toBlob(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='abi-uho-kadry.png';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),5000)},'image/png')};
+// кадры звука одной картинкой: «до» и два кадра «после» (с рамкой найденного ящика) — для настройки определителя
+function dbgBlob(before,after,res){return new Promise(ok=>{try{const fr=[before,...after].filter(Boolean);if(!fr.length)return ok(null);
+ const W=fr[0].width,H=fr[0].height,c=document.createElement('canvas');c.width=W;c.height=H*fr.length;const x=c.getContext('2d');
+ fr.forEach((f,i)=>{x.putImageData(f,0,i*H);x.fillStyle='#000a';x.fillRect(0,i*H,420,44);x.fillStyle='#ffd84a';x.font='bold 28px sans-serif';x.fillText(i===0&&before?'ДО ЗВУКА':'ПОСЛЕ +'+(i===(before?1:0)?'0,12':'0,3')+' с',12,i*H+32)});
+ if(res){x.strokeStyle='#ffd84a';x.lineWidth=3;const[bx,by,bw,bh]=res.box;for(let i=before?1:0;i<fr.length;i++)x.strokeRect(bx,by+i*H,bw,bh)}
+ c.toBlob(b=>ok(b),'image/jpeg',0.92)}catch(e){ok(null)}})}
+async function saveFrames(it){if(!it||!it.dbg){status('У этого звука нет кадров: нужно «Слушать игру» → «Весь экран» со звуком');return}
+ const b=await it.dbg;if(!b){status('Кадры не сохранились');return}const a=document.createElement('a');a.href=URL.createObjectURL(b);
+ a.download='abi-uho-kadry-'+new Date(it.t).toLocaleTimeString('ru-RU').replace(/:/g,'-')+'.jpg';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),5000);status('Кадры сохранены в загрузки',true)}
+$('bDbg').onclick=()=>saveFrames(lastNow);
 
 
 window.ABI_TEST={attach,stop,get set(){return set}};
