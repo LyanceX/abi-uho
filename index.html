@@ -605,28 +605,39 @@ document.querySelectorAll('.impFile').forEach(el=>el.addEventListener('change',i
 /* ===== Размер ящика по экрану ===== */
 // Кадры берутся из той же трансляции экрана. Вся работа запускается из обработчика звука,
 // потому что таймеры во фоновой вкладке браузер замедляет, а звук — нет.
-const VIS={dbgMap:new Map(),src:null,reader:null,latest:null,video:null,canvas:null,snaps:[],nextSnap:0,jobs:[],results:new Map(),Phist:[],P:0};
+const VIS={sess:null,dbgMap:new Map(),src:null,reader:null,latest:null,video:null,canvas:null,snaps:[],nextSnap:0,jobs:[],results:new Map(),Phist:[],P:0};
 const MAXW=1600;
 function visStart(stream){visStop();const vt=stream.getVideoTracks()[0];if(!vt)return;
  if('MediaStreamTrackProcessor' in window){try{const rd=new MediaStreamTrackProcessor({track:vt}).readable.getReader();VIS.reader=rd;
   (async()=>{try{for(;;){const{value,done}=await rd.read();if(done)break;if(VIS.latest)VIS.latest.close();VIS.latest=value}}catch(e){}})();return}catch(e){}}
  const v=document.createElement('video');v.muted=true;v.playsInline=true;v.srcObject=new MediaStream([vt]);v.play().catch(()=>{});VIS.video=v}
 function visStop(){try{VIS.reader&&VIS.reader.cancel()}catch(e){}if(VIS.latest){try{VIS.latest.close()}catch(e){}}
- if(VIS.video){VIS.video.srcObject=null}VIS.reader=VIS.latest=VIS.video=null;VIS.snaps=[];VIS.jobs=[];VIS.nextSnap=0;VIS.results.clear()}
+ if(VIS.video){VIS.video.srcObject=null}VIS.reader=VIS.latest=VIS.video=null;VIS.snaps=[];VIS.jobs=[];VIS.sess=null;VIS.nextSnap=0;VIS.results.clear()}
 function visFrame(){const s=VIS.latest||VIS.video;if(!s)return null;const sw=s.displayWidth||s.videoWidth,sh=s.displayHeight||s.videoHeight;if(!sw||!sh)return null;
  const f=Math.min(1,MAXW/sw),W=Math.round(sw*f),H=Math.round(sh*f);const c=VIS.canvas||(VIS.canvas=document.createElement('canvas'));if(c.width!==W||c.height!==H){c.width=W;c.height=H}
  const x=c.getContext('2d',{willReadFrequently:true});try{x.drawImage(s,0,0,W,H)}catch(e){return null}return x.getImageData(0,0,W,H)}
-// вызывается после каждого блока звука: снимки «до» раз в ~0,4 с и разбор кадров после звука
-function visTick(total,sr){if(!set.vis||(!VIS.latest&&!VIS.video))return;
- if(VIS.jobs.length){const j=VIS.jobs[0];if(total>=j.due[0]){j.due.shift();const img=visFrame();
-   if(img){const bf=pickBefore(j.on,sr);let r=null;if(bf)r=CargoVision.analyzeTint(img,bf.t,VIS.P||CargoVision.hintP(img),bf.g);j.frames.push(img);j.bf=bf;if(r){r.shot=cropShot(r);j.res.push(r)}}
-   if(!j.due.length){VIS.jobs.shift();const br=bestRes(j.res);VIS.results.set(j.on,br);VIS.dbgMap.set(j.on,dbgBlob(j.bf&&j.bf.img,j.frames,br));onVisDone(j.on,br);if(VIS.dbgMap.size>12)VIS.dbgMap.delete(VIS.dbgMap.keys().next().value);if(VIS.results.size>30)VIS.results.delete(VIS.results.keys().next().value)}}
-  return}
+// Сеанс просмотра экрана: от звука («взял») до следующего звука («положил»), но не дольше 4 с.
+// Подсветка появляется, только когда предмет сдвинули, — поэтому смотрим всё время, пока его держат (кадр каждые 0,15 с).
+// Вне сеансов раз в 0,4 с запоминаем кадр «до».
+function visTick(total,sr){if(!set.vis||(!VIS.latest&&!VIS.video))return;const s=VIS.sess;
+ if(s){if(total>=s.next){s.next=total+Math.round(0.15*sr);const img=visFrame();
+   if(img){if(!s.first)s.first=img;s.last=img;s.n++;
+    if(s.bf){const r=CargoVision.analyzeTint(img,s.bf.t,VIS.P||CargoVision.hintP(img),s.bf.g);if(r){r.shot=cropShot(r);s.res.push(r);if(s.keep.length<2)s.keep.push(img)}}}}
+  if(total>=s.end)closeSess();return}
  if(total>=VIS.nextSnap){VIS.nextSnap=total+Math.round(0.4*sr);const img=visFrame();if(img){VIS.snaps.push({at:total,t:CargoVision.tints(img),g:CargoVision.gray(img),img});if(VIS.snaps.length>3)VIS.snaps.shift()}}}
 function pickBefore(on,sr){let b=null;for(const s of VIS.snaps)if(s.at<on-0.12*sr)b=s;return b||VIS.snaps[0]||null}
-function bestRes(rs){if(!rs.length)return null;const r=[...rs].sort((a,b)=>b.conf-a.conf||b.w*b.h-a.w*a.h)[0];
- if(r.agree){VIS.Phist.push(r.P);if(VIS.Phist.length>15)VIS.Phist.shift();const s=[...VIS.Phist].sort((a,b)=>a-b);if(s.length>=3)VIS.P=s[s.length>>1]}return r}
-function visTrig(on,sr){if(!set.vis||(!VIS.latest&&!VIS.video))return;VIS.jobs.push({on,due:[0.15,0.3,0.45,0.6,0.75].map(t=>on+Math.round(t*sr)),res:[],frames:[]})}
+// итог сеанса: размер, который встречался чаще всего (подсветка может на миг обрезаться краем сетки)
+function bestRes(rs){if(!rs.length)return null;const cnt={};for(const r of rs){const k=sizeKey(r);cnt[k]=(cnt[k]||0)+1}
+ const top=Object.keys(cnt).sort((a,b)=>cnt[b]-cnt[a]||b.split('×').reduce((p,v)=>p*v,1)-a.split('×').reduce((p,v)=>p*v,1))[0];
+ const r=rs.filter(x=>sizeKey(x)===top).sort((a,b)=>b.conf-a.conf)[0];r.seen=cnt[top];r.frames=rs.length;
+ VIS.Phist.push(r.P);if(VIS.Phist.length>15)VIS.Phist.shift();const s=[...VIS.Phist].sort((a,b)=>a-b);if(s.length>=3)VIS.P=s[s.length>>1];return r}
+function closeSess(){const s=VIS.sess;if(!s)return;VIS.sess=null;const br=bestRes(s.res);VIS.results.set(s.on,br);
+ const fr=[s.first,...s.keep,s.last].filter((v,i,a)=>v&&a.indexOf(v)===i).slice(0,5);VIS.dbgMap.set(s.on,dbgBlob(s.bf&&s.bf.img,fr,br));
+ if(VIS.dbgMap.size>12)VIS.dbgMap.delete(VIS.dbgMap.keys().next().value);if(VIS.results.size>30)VIS.results.delete(VIS.results.keys().next().value);
+ onVisDone(s.on,br)}
+function visTrig(on,sr){if(!set.vis||(!VIS.latest&&!VIS.video))return;const s=VIS.sess;
+ if(s){if(on-s.on<0.25*sr)return;const dragging=s.res.length>0;closeSess();if(dragging)return}   // во время перетаскивания новый звук — это «положил»
+ VIS.sess={on,next:on+Math.round(0.12*sr),end:on+Math.round(4*sr),res:[],keep:[],first:null,last:null,n:0,bf:pickBefore(on,sr)}}
 // картинка вокруг найденного ящика с рамкой — чтобы было видно, какой ящик тянули
 function cropShot(r){const src=VIS.canvas;if(!src)return null;const[bx,by,bw,bh]=r.box,pad=Math.round(Math.max(bw,bh)*0.35+10);
  const x0=Math.max(0,bx-pad),y0=Math.max(0,by-pad),w=Math.min(src.width,bx+bw+pad)-x0,h0=Math.min(src.height,by+bh+pad)-y0;
@@ -664,9 +675,12 @@ function alertRed(it){const c=redChance(it);if(!c||!c.sure||!c.V.red)return;cons
 // Пара «взял → положил» одного ящика. «Положил» без «взял» (перенос кнопкой F) не считается.
 let pick=null,lastGood=0;
 function sameCargo(a,b){if(!a||!b)return true;const[ax,ay,aw,ah]=a.box,[bx,by,bw,bh]=b.box;const ix=Math.max(0,Math.min(ax+aw,bx+bw)-Math.max(ax,bx)),iy=Math.max(0,Math.min(ay+ah,by+bh)-Math.max(ay,by));return ix*iy>0.5*Math.min(aw*ah,bw*bh)}
-function mergeInto(it,prev){const pm=new Map(prev.matches.map(x=>[x.g,x.s]));it.single=it.matches;
- it.matches=it.matches.map(x=>({g:x.g,kind:x.kind,s:pm.has(x.g)?(x.s+pm.get(x.g))/2:x.s*0.5})).sort((a,b)=>b.s-a.s);
- if(!it.size)it.size=prev.size;it.prevIt=prev;it.merged=true;const t=it.node&&it.node.querySelector('.meta');if(t)t.textContent+=' · «положил», вместе с «взял»'}
+// «положил» дополняет строку «взял»: среднее сходство по двум звукам, одна строка, один итог
+function mergePut(pk,put){const pm=new Map(put.matches.map(x=>[x.g,x.s]));pk.single=pk.matches;
+ pk.matches=pk.matches.map(x=>({g:x.g,kind:x.kind,s:pm.has(x.g)?(x.s+pm.get(x.g))/2:x.s*0.5})).sort((a,b)=>b.s-a.s);
+ pk.merged=true;pk.putSeg=put.seg;RECENT=RECENT.filter(x=>x!==put);put.node&&put.node.remove();
+ const t=pk.node&&pk.node.querySelector('.meta');if(t)t.textContent=t.textContent.replace(' · «взял»','')+' · «взял» → «положил»';
+ const el=pk.node&&pk.node.querySelector('.ttl');if(el)el.innerHTML=itemTitle(pk)}
 function onLive(seg,sr,on){const size=on!=null&&VIS.results.has(on)?VIS.results.get(on):null;sizeSel=null;const it=addRecent(seg,sr,'игра',size);if(!it)return;it.dbg=on!=null?VIS.dbgMap.get(on)||null:null;it.on=on;
  if(set.rec){const e2=addRef(set.recG,seg,sr);dbPut(e2);it.node.querySelector('[data-a=save]').textContent='Сохранено';it.node.querySelector('select').value=set.recG;
   status('Эталон записан в №'+set.recG,true);if(set.adv&&set.recG<38){set.recG++;$('recG').value=set.recG;saveSet()}renderCat();refreshTitles();return}
@@ -678,18 +692,16 @@ function onLive(seg,sr,on){const size=on!=null&&VIS.results.has(on)?VIS.results.
  const kind=top0.kind;it.kind=kind;
  if(kind==='взять'){pick={at:now,it,done:false};const t=it.node&&it.node.querySelector('.meta');if(t)t.textContent+=' · «взял»';showNow(it);return}
  // «положил» после «взял» того же ящика: итог по двум звукам
- if(pick&&now-pick.at<3000&&sameCargo(pick.it.size,it.size)){mergeInto(it,pick.it);pick.done=true;pick=null;
-  const el=it.node&&it.node.querySelector('.ttl');if(el)el.innerHTML=itemTitle(it);showNow(it);alertRed(it);return}
+ if(pick&&now-pick.at<4500&&sameCargo(pick.it.size,it.size)){const pk=pick.it;mergePut(pk,it);pick.done=true;pick=null;showNow(pk);alertRed(pk);return}
  if(kind===null){pick={at:now,it,done:false};showNow(it);return}
  // «положил» без «взял» (перенос кнопкой F) — не считается
  const t=it.node&&it.node.querySelector('.meta');if(t)t.textContent+=' · «положил» без «взял» — пропущен';showNow(it)}
 // размер ящика по кадрам готов позже звука (кадры до +0,6 с) — дописываем его и только тогда сообщаем итог
 function onVisDone(on,br){const it=RECENT.find(x=>x.on===on);if(!it)return;it.dbg=VIS.dbgMap.get(on)||it.dbg;if(!br||it.size)return;it.size=br;
- const upd=x=>{const el=x.node&&x.node.querySelector('.ttl');if(el)el.innerHTML=itemTitle(x);putShot(x.node&&x.node.querySelector('.shot'),x.size&&x.size.shot)};upd(it);
- for(const x of RECENT)if(x.prevIt===it&&!x.size){x.size=br;upd(x);if(lastNow===x){showNow(x);alertRed(x)}}
- if(lastNow===it)showNow(it)}
-// «взял» есть, а «положил» не пойман за 1,2 с (держишь ящик или звук потерялся) — сообщаем по одному «взял»
-function pickTick(){if(pick&&!pick.done&&Date.now()-pick.at>1200){pick.done=true;alertRed(pick.it)}}
+ const el=it.node&&it.node.querySelector('.ttl');if(el)el.innerHTML=itemTitle(it);putShot(it.node&&it.node.querySelector('.shot'),br.shot);
+ if(lastNow===it){showNow(it);if(it.merged)alertRed(it)}}
+// «положил» так и не прозвучал (звук потерялся) — через 4,6 с сообщаем по одному «взял»
+function pickTick(){if(pick&&!pick.done&&Date.now()-pick.at>4600){pick.done=true;if(lastNow===pick.it)showNow(pick.it);alertRed(pick.it)}}
 function stop(){try{S.proc&&S.proc.disconnect()}catch(e){}try{S.src&&S.src.disconnect()}catch(e){}if(S.stream)S.stream.getTracks().forEach(t=>t.stop());if(S.ctx)S.ctx.close().catch(()=>{});
  S.ctx=S.stream=S.proc=S.src=S.det=null;visStop();status('Не слушаю')}
 function attach(stream,label){stop();const ctx=new AudioContext();S.ctx=ctx;S.stream=stream;if(ctx.sampleRate!==builtinSr)loadBuiltins(ctx.sampleRate);
@@ -725,7 +737,7 @@ $('bPip').onclick=openPip;
 // кадры звука одной картинкой: «до» и два кадра «после» (с рамкой найденного ящика) — для настройки определителя
 function dbgBlob(before,after,res){return new Promise(ok=>{try{const fr=[before,...after].filter(Boolean);if(!fr.length)return ok(null);
  const W=fr[0].width,H=fr[0].height,c=document.createElement('canvas');c.width=W;c.height=H*fr.length;const x=c.getContext('2d');
- fr.forEach((f,i)=>{x.putImageData(f,0,i*H);x.fillStyle='#000a';x.fillRect(0,i*H,420,44);x.fillStyle='#ffd84a';x.font='bold 28px sans-serif';x.fillText(i===0&&before?'ДО ЗВУКА':'ПОСЛЕ +'+['0,15','0,3','0,45','0,6','0,75'][i-(before?1:0)]+' с',12,i*H+32)});
+ fr.forEach((f,i)=>{x.putImageData(f,0,i*H);x.fillStyle='#000a';x.fillRect(0,i*H,420,44);x.fillStyle='#ffd84a';x.font='bold 28px sans-serif';x.fillText(i===0&&before?'ДО ЗВУКА':'ПОКА ДЕРЖИШЬ, кадр '+(i-(before?1:0)+1),12,i*H+32)});
  if(res){x.strokeStyle='#ffd84a';x.lineWidth=3;const[bx,by,bw,bh]=res.box;for(let i=before?1:0;i<fr.length;i++)x.strokeRect(bx,by+i*H,bw,bh)}
  c.toBlob(b=>ok(b),'image/jpeg',0.92)}catch(e){ok(null)}})}
 async function saveFrames(it){if(!it||!it.dbg){status('У этого звука нет кадров: нужно «Слушать игру» → «Весь экран» со звуком');return}
