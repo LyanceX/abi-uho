@@ -184,15 +184,18 @@ const CargoVision=(()=>{
  const ST=2;                       // прореживание для цветовых карт
  const AREA={x0:0.3,x1:0.99,y0:0.06,y1:0.95};   // где ищем: всё, кроме персонажа слева (рюкзак, карманы, хранилище, торговец)
  // «оттенок» каждого пикселя: насколько красный (k=0) или зелёный (k=1) выше двух других каналов
- function tints(img){const{data:d,width:w,height:h}=img,W=Math.floor(w/ST),H=Math.floor(h/ST),R=new Int16Array(W*H),G=new Int16Array(W*H),MX=new Uint8Array(W*H);
-  for(let y=0;y<H;y++){let i=(y*ST*w)*4;for(let x=0;x<W;x++,i+=ST*4){const r=d[i],g=d[i+1],b=d[i+2];R[y*W+x]=r-Math.max(g,b);G[y*W+x]=g-Math.max(r,b);MX[y*W+x]=Math.max(r,g,b)}}
-  return{W,H,t:[R,G],mx:MX}}
+ function tints(img){const{data:d,width:w,height:h}=img,W=Math.floor(w/ST),H=Math.floor(h/ST),R=new Int16Array(W*H),G=new Int16Array(W*H),MX=new Uint8Array(W*H),GB=new Uint8Array(W*H),RB=new Uint8Array(W*H),MN=new Uint8Array(W*H);
+  for(let y=0;y<H;y++){let i=(y*ST*w)*4;for(let x=0;x<W;x++,i+=ST*4){const r=d[i],g=d[i+1],b=d[i+2];R[y*W+x]=r-Math.max(g,b);G[y*W+x]=g-Math.max(r,b);MX[y*W+x]=Math.max(r,g,b);GB[y*W+x]=Math.abs(g-b);RB[y*W+x]=Math.abs(r-b);MN[y*W+x]=Math.min(r,g,b)}}
+  return{W,H,t:[R,G],mx:MX,eq:[GB,RB],mn:MN}}
  // маска подсветки: оттенок вырос относительно кадра до звука (или, без него, просто сильный оттенок)
  // Подсветка места под перетаскиваемым предметом: тёмный ровный зелёный (25,53,25) или красный.
  // Яркую картинку предмета, которая едет за курсором, отсекаем по яркости.
  function tintMask(now,before,k){const{W,H}=now,a=now.t[k],mx=now.mx,b=before&&before.W===W&&before.H===H?before.t[k]:null,m=new Uint8Array(W*H);
   const x0=Math.floor(W*AREA.x0),x1=Math.ceil(W*AREA.x1),y0=Math.floor(H*AREA.y0),y1=Math.ceil(H*AREA.y1);
-  for(let y=y0;y<y1;y++)for(let x=x0;x<x1;x++){const i=y*W+x;const v=a[i];if(v>=15&&v<=75&&mx[i]<130&&(!b||v-b[i]>12))m[i]=1}return m}
+  // у подсветки два других канала почти равны, а ведущий — в 1,5–3,5 раза больше их (зелёная 25,53,25); у кожи и картинок это не так
+  const eq=now.eq[k],mn=now.mn;
+  for(let y=y0;y<y1;y++)for(let x=x0;x<x1;x++){const i=y*W+x;const v=a[i];
+   if(v>=15&&v<=75&&mx[i]<130&&eq[i]<=5&&mx[i]>=mn[i]*1.5&&mx[i]<=mn[i]*3.5+8&&(!b||v-b[i]>12))m[i]=1}return m}
  function biggestBlob(m,W,H){const seen=new Uint8Array(W*H),q=new Int32Array(W*H);let best=null;
   for(let s=0;s<W*H;s++){if(!m[s]||seen[s])continue;let qh=0,qt=0,n=0,x0=1e9,y0=1e9,x1=-1,y1=-1;q[qt++]=s;seen[s]=1;
    while(qh<qt){const p=q[qh++],x=p%W,y=(p-x)/W;n++;if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y;
@@ -353,6 +356,11 @@ const CargoVision=(()=>{
   const cs=[...sel].map(i=>i%cols),ks=[...sel].map(i=>(i-i%cols)/cols),c0=Math.min(...cs),k0=Math.min(...ks),cw=Math.max(...cs)-c0+1,ch=Math.max(...ks)-k0+1;
   if(cw>6||ch>6)return null;
   if(sel.size<cw*ch*0.6)return null;                 // не прямоугольник — что-то другое
+  // подсветка лежит ровно на клетках: внутри прямоугольника её много, снаружи почти нет
+  {let inH=0,inN=0,outH=0;const X0=rx+xs[c0],X1=rx+xs[c0+cw],Y0=ry+ys[k0],Y1=ry+ys[k0+ch];
+   for(let y=Math.floor(ry/ST);y<Math.floor((ry+rh)/ST);y++)for(let x=Math.floor(rx/ST);x<Math.floor((rx+rw)/ST);x++){const px=x*ST,py=y*ST,v=m[y*W+x];
+    if(px>=X0&&px<X1&&py>=Y0&&py<Y1){inN++;inH+=v}else outH+=v}
+   if(!inN||inH/inN<0.18||outH>inH*0.25)return null}
   const bx=rx+xs[c0],by=ry+ys[k0];
   return{w:cw,h:ch,P,box:[bx,by,rx+xs[c0+cw]-bx,ry+ys[k0+ch]-by],roi:[rx,ry,rw,rh],agree:true,conf:Math.min(1,sel.size/(cw*ch)),how:'tint',color:k?'зелёная':'красная'}}
  // ожидаемый размер клетки: ~85 px при ширине 2505–2560 (≈3,35% ширины), но не больше 6,4% высоты
