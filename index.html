@@ -116,7 +116,7 @@ code{font-family:"JetBrains Mono",monospace;font-size:13px;background:#0e100c;pa
     <div id="nowSub">Нажми «Слушать игру», наведи на ящик у торговца, дождись цены и потяни его</div>
     <div id="nowAlt"></div>
     <canvas id="nowShot" class="shot" hidden></canvas>
-    <div class="row" style="margin-top:8px"><button class="sm" id="bDbg">Сохранить кадры этого звука</button><span class="k">— или кнопка «Кадры» у нужного звука в ленте ниже</span></div>
+    <div class="row" style="margin-top:8px"><button class="sm" id="bDbg">Сохранить кадры этого звука</button> <button class="sm" id="bLog">Сохранить запись 40 с для разбора</button><span class="k">— или кнопка «Кадры» у нужного звука в ленте ниже</span></div>
     <canvas id="nowSpec" class="spec" width="60" height="48"></canvas>
     <div id="nowItemsWrap" hidden>
       <div class="k" id="sizeLbl">Размер ящика</div>
@@ -637,7 +637,7 @@ function visTick(total,sr){if(!set.vis||(!VIS.latest&&!VIS.video))return;VIS.sr=
  const img=visFrame();if(!img)return;const t=CargoVision.tints(img),bf=VIS.clean;
  // кадр без новой зелени — новый «до»; если «зелень» держится больше 6 с, это уже другой экран, а не подсветка
  if(!bf||!CargoVision.hasHighlight(img,t,bf.t)||total-bf.at>6*sr&&total-VIS.hlStart>6*sr){VIS.clean={at:total,img,t,g:null};return}
- if(total-VIS.lastHl>0.6*sr)VIS.hlStart=total;VIS.lastHl=total;let r=null;
+ if(total-VIS.lastHl>0.6*sr){VIS.hlStart=total;logEv('подсветка началась')}VIS.lastHl=total;let r=null;
  if(!bf.g)bf.g=CargoVision.gray(bf.img);r=CargoVision.analyzeTint(img,bf.t,VIS.P||CargoVision.hintP(img),bf.g,t);if(r)r.shot=cropShot(r)
  VIS.hl.push({at:total,r});while(VIS.hl.length&&VIS.hl[0].at<total-8*sr)VIS.hl.shift();
  VIS.imgs.push({at:total,img,bf,r});if(VIS.imgs.length>8)VIS.imgs.shift()}
@@ -699,13 +699,13 @@ function mergePut(pk,put){const pm=new Map(put.matches.map(x=>[x.g,x.s]));pk.sin
  pk.merged=true;pk.putSeg=put.seg;RECENT=RECENT.filter(x=>x!==put);put.node&&put.node.remove();
  const t=pk.node&&pk.node.querySelector('.meta');if(t)t.textContent=t.textContent.replace(' · «взял»','')+' · «взял» → «положил»';
  const el=pk.node&&pk.node.querySelector('.ttl');if(el)el.innerHTML=itemTitle(pk)}
-function onLive(seg,sr,on){sizeSel=null;const it=addRecent(seg,sr,'игра',null);if(!it)return;it.on=on;
+function onLive(seg,sr,on){sizeSel=null;const it=addRecent(seg,sr,'игра',null);logEv('звук',{on,top:it?it.matches.slice(0,3).map(x=>[x.g,x.kind,+x.s.toFixed(2)]):'короткий',pick:!!pick,hlLast:VIS.lastHl});if(!it)return;it.on=on;
  if(set.rec){const e2=addRef(set.recG,seg,sr);dbPut(e2);it.node.querySelector('[data-a=save]').textContent='Сохранено';it.node.querySelector('select').value=set.recG;
   status('Эталон записан в №'+set.recG,true);if(set.adv&&set.recG<38){set.recG++;$('recG').value=set.recG;saveSet()}renderCat();refreshTitles();return}
  const top0=it.matches[0],now=Date.now(),good=top0&&top0.s>=MAYBE,SR=sr,ON=on!=null?on:(S.det?S.det.total:0);
  // хвост того же звука (у многих звуков есть второй удар через 0,25–0,5 с): похож на тот же звук сильнее, чем на парный — выкидываем
- if(lastSnd&&ON-lastSnd.on<0.6*SR&&ON>lastSnd.on){const same=simGK(it.feat,lastSnd.g,lastSnd.kind),pair=simGK(it.feat,lastSnd.g,lastSnd.kind==='взять'?'положить':'взять');
-  if(same>=0.6&&same>=pair){RECENT=RECENT.filter(x=>x!==it);it.node&&it.node.remove();return}}
+ if(lastSnd&&ON-lastSnd.on<0.5*SR&&ON>lastSnd.on){const same=simGK(it.feat,lastSnd.g,lastSnd.kind),pair=simGK(it.feat,lastSnd.g,lastSnd.kind==='взять'?'положить':'взять');
+  logEv('хвост?',{same:+same.toFixed(2),pair:+pair.toFixed(2)});if(same>=0.6&&same>=pair+0.04){logEv('выкинут как хвост');RECENT=RECENT.filter(x=>x!==it);it.node&&it.node.remove();return}}
  if(good)lastSnd={on:ON,g:top0.g,kind:top0.kind};
  // не узнанный звук сразу после нашей же фразы — скорее всего, это и есть фраза: экран не трогаем
  if(!good&&now-spokeAt<2500&&!pick)return;
@@ -725,10 +725,10 @@ function onLive(seg,sr,on){sizeSel=null;const it=addRecent(seg,sr,'игра',nul
  // Если подсветки не было — это перенос кнопкой F, пропускаем.
  const a=Math.max(ON-Math.round(4*SR),lastFin.on),b=ON+Math.round(0.1*SR);
  if(set.vis&&dragged(a,b)){it.merged=true;const t=it.node&&it.node.querySelector('.meta');if(t)t.textContent+=' · тянул → «положил»';finish(it,a,b);return}
- const t=it.node&&it.node.querySelector('.meta');if(t)t.textContent+=' · «положил» без «взял» — пропущен';showNow(it)}
+ logEv('положил без взял — пропуск');const t=it.node&&it.node.querySelector('.meta');if(t)t.textContent+=' · «положил» без «взял» — пропущен';showNow(it)}
 // итог действия: размер по кадрам, пока тянули, затем экран и голос
 let lastFin={it:null,at:0,on:-1e12};
-function finish(it,a,b){applySize(it,a,b);lastFin={it,at:Date.now(),on:b};showNow(it);alertRed(it)}
+function finish(it,a,b){logEv('итог',{g:it.matches[0].g,a,b,hl:VIS.hl.filter(x=>x.at>=a&&x.at<=b).map(x=>x.r?x.r.w+'x'+x.r.h:'-')});applySize(it,a,b);lastFin={it,at:Date.now(),on:b};showNow(it);alertRed(it)}
 // второй звук не разобрать (наложился, тихий) или его не было — итог по «взял»
 function releaseOnly(pk,put,how){pk.merged=true;if(put){RECENT=RECENT.filter(x=>x!==put);put.node&&put.node.remove()}
  const t=pk.node&&pk.node.querySelector('.meta');if(t)t.textContent=t.textContent.replace(' · «взял»','')+' · «взял» → '+how;const el=pk.node&&pk.node.querySelector('.ttl');if(el)el.innerHTML=itemTitle(pk)}
@@ -736,12 +736,25 @@ function releaseOnly(pk,put,how){pk.merged=true;if(put){RECENT=RECENT.filter(x=>
 function pickTick(total,sr){if(!pick)return;const age=Date.now()-pick.at;
  if(set.vis&&VIS.lastHl>pick.on&&total-VIS.lastHl>1.3*sr){const pk=pick.it;pick=null;releaseOnly(pk,null,'отпустил');finish(pk,pk.on-Math.round(0.6*sr),total);return}
  if(age>4500)pick=null}
+// запись для разбора: последние 40 с звука (моно) и журнал решений
+const REC={buf:null,pos:0,sr:48000,n:0};let LOG=[];
+function logEv(type,d){LOG.push(Object.assign({t:S.det?S.det.total:0,ms:Date.now(),type},d||{}));if(LOG.length>400)LOG.splice(0,LOG.length-400)}
+function recFeed(m,sr){if(!REC.buf||REC.sr!==sr){REC.sr=sr;REC.buf=new Float32Array(sr*40);REC.pos=0;REC.n=0}const B=REC.buf,L=B.length;for(let i=0;i<m.length;i++){B[REC.pos]=m[i];REC.pos=(REC.pos+1)%L}REC.n=Math.min(L,REC.n+m.length)}
+function saveLog(){if(!REC.buf||!REC.n){status('Нечего сохранять: сначала «Слушать игру»');return}const L=REC.buf.length,n=REC.n,sr=REC.sr,start=(REC.pos-n+L)%L;
+ const pcm=new Int16Array(n);for(let i=0;i<n;i++){const v=REC.buf[(start+i)%L];pcm[i]=Math.max(-32768,Math.min(32767,Math.round(v*32767)))}
+ const hdr=new DataView(new ArrayBuffer(44)),w=(o,s)=>{for(let i=0;i<4;i++)hdr.setUint8(o+i,s.charCodeAt(i))};w(0,'RIFF');hdr.setUint32(4,36+n*2,true);w(8,'WAVE');w(12,'fmt ');hdr.setUint32(16,16,true);hdr.setUint16(20,1,true);hdr.setUint16(22,1,true);hdr.setUint32(24,sr,true);hdr.setUint32(28,sr*2,true);hdr.setUint16(32,2,true);hdr.setUint16(34,16,true);w(36,'data');hdr.setUint32(40,n*2,true);
+ const meta={app:'abi-uho-log',v:1,sr,endTotal:S.det?S.det.total:0,startTotal:(S.det?S.det.total:0)-n,set,ua:navigator.userAgent,refs:CAT.length,log:LOG,hl:VIS.hl.map(x=>[x.at,x.r?x.r.w+'x'+x.r.h:'-']),recent:RECENT.slice(0,15).map(x=>({on:x.on,meta:x.node&&x.node.querySelector('.meta')?x.node.querySelector('.meta').textContent:'',top:x.matches.slice(0,3).map(m=>[m.g,m.kind,+m.s.toFixed(2)])}))};
+ const stamp=new Date().toLocaleTimeString('ru-RU').replace(/:/g,'-');
+ const dl=(blob,name)=>{const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),8000)};
+ dl(new Blob([hdr.buffer,pcm.buffer],{type:'audio/wav'}),'abi-uho-zvuk-'+stamp+'.wav');setTimeout(()=>dl(new Blob([JSON.stringify(meta)],{type:'application/json'}),'abi-uho-log-'+stamp+'.json'),400);
+ status('Сохранено в загрузки: запись звука и журнал',true)}
+$('bLog').onclick=saveLog;
 function stop(){try{S.proc&&S.proc.disconnect()}catch(e){}try{S.src&&S.src.disconnect()}catch(e){}if(S.stream)S.stream.getTracks().forEach(t=>t.stop());if(S.ctx)S.ctx.close().catch(()=>{});
  S.ctx=S.stream=S.proc=S.src=S.det=null;visStop();status('Не слушаю')}
-function attach(stream,label){stop();pick=null;lastSnd=null;lastFin={it:null,at:0,on:-1e12};const ctx=new AudioContext();S.ctx=ctx;S.stream=stream;if(ctx.sampleRate!==builtinSr)loadBuiltins(ctx.sampleRate);
+function attach(stream,label){stop();pick=null;lastSnd=null;LOG=[];REC.n=0;lastFin={it:null,at:0,on:-1e12};const ctx=new AudioContext();S.ctx=ctx;S.stream=stream;if(ctx.sampleRate!==builtinSr)loadBuiltins(ctx.sampleRate);
  S.det=new Detector(ctx.sampleRate,()=>set,onLive);visStart(stream);
  const src=ctx.createMediaStreamSource(stream),proc=ctx.createScriptProcessor(1024,2,1);
- proc.onaudioprocess=e=>{const ib=e.inputBuffer,a=ib.getChannelData(0),b=ib.numberOfChannels>1?ib.getChannelData(1):a,m=new Float32Array(a.length);for(let i=0;i<a.length;i++)m[i]=(a[i]+b[i])*0.5;if(S.det){S.det.feed(m);visTick(S.det.total,S.det.sr);pickTick(S.det.total,S.det.sr)}e.outputBuffer.getChannelData(0).fill(0)};
+ proc.onaudioprocess=e=>{const ib=e.inputBuffer,a=ib.getChannelData(0),b=ib.numberOfChannels>1?ib.getChannelData(1):a,m=new Float32Array(a.length);for(let i=0;i<a.length;i++)m[i]=(a[i]+b[i])*0.5;if(S.det){recFeed(m,S.det.sr);S.det.feed(m);visTick(S.det.total,S.det.sr);pickTick(S.det.total,S.det.sr)}e.outputBuffer.getChannelData(0).fill(0)};
  src.connect(proc);proc.connect(ctx.destination);S.src=src;S.proc=proc;
  stream.getTracks().forEach(t=>t.addEventListener('ended',()=>{if(S.stream===stream)stop()}));status('Слушаю: '+label,true)}
 $('bDisp').onclick=async()=>{try{const st=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:{ideal:30,max:30}},audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false},systemAudio:'include',selfBrowserSurface:'exclude'});
