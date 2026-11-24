@@ -87,22 +87,52 @@ details.help summary{cursor:pointer;font-weight:500}
 details.help li{margin:6px 0}
 .empty{color:var(--mute);padding:12px 0}
 code{font-family:"JetBrains Mono",monospace;font-size:13px;background:#0e100c;padding:1px 5px;border-radius:4px;overflow-wrap:anywhere}
+#nowItems li{grid-template-columns:12px minmax(0,1fr) auto auto auto}
+#trState{color:var(--ink)}#trState.on{color:#9fe07a}
+details.more>summary{cursor:pointer;font-size:18px;font-weight:700;padding:4px 0}
+#bMap b{color:var(--kh);font-weight:500}
+button.pulse{animation:pulse 1.1s ease-in-out infinite alternate}@keyframes pulse{to{border-color:var(--kh);box-shadow:0 0 0 3px #c7bd7d55}}
+dialog{width:min(640px,94vw);border:1px solid var(--line);border-radius:14px;background:var(--panel);color:var(--ink);padding:18px}
+dialog::backdrop{background:#0b0d09cc}
+.maps{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:10px;margin:12px 0}
+.mapc{border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.mapc.act{border-color:var(--kh)}
+.mapc b{display:block;margin-bottom:6px}
+.mapc .chips{margin:0}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:10px}
+.stats div{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 12px}
+.stats b{display:block;font-size:24px;font-weight:700;line-height:1.2}
+.stats .r b{color:var(--red)}
+.jr{list-style:none;margin:0;padding:0;max-height:340px;overflow:auto}
+.jr li{display:grid;grid-template-columns:12px minmax(0,1fr) auto auto;gap:10px;align-items:center;padding:6px 4px;border-bottom:1px solid var(--line);font-size:14px}
+.jr .meta{color:var(--mute);font-size:13px}
+.form{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;align-items:end}
+.form label{font-size:13px;color:var(--mute);display:grid;gap:4px}
+.form input,.form select{width:100%}
+input[type=number],.form input{font:inherit;font-size:15px;color:var(--ink);background:#262b22;border:1px solid var(--line);border-radius:8px;min-height:40px;padding:6px 12px}
+@media(prefers-reduced-motion:reduce){button.pulse{animation:none;border-color:var(--kh)}}
 @media(prefers-reduced-motion:reduce){.now{transition:none}}
 </style>
 </head>
 <body>
 <div class="band"><div class="wrap">
   <h1>Ухо торговца</h1>
-  <p class="lead">Слушает звук игры в фоне. Дёрни ящик у полевого торговца: сайт узнает звуковую группу и покажет, какие предметы так звучат и есть ли среди них красные. Всё считается в браузере, никуда не отправляется.</p>
+  <p class="lead">Выбери карту и окно игры, открой торговца и тяни ящики. В окне поверх игры видно, где красный предмет есть, где возможен и где его нет.</p>
   <div class="row">
     <button id="bDisp" class="pri">Слушать игру</button>
-    <select id="dev" aria-label="Аудиовход"><option value="">Вход: стерео микшер / VB-Cable…</option></select>
-    <button id="bDev">Слушать вход</button>
+    <button id="bMap">Карта: <b id="mapLbl">не указана</b></button>
     <button id="bStop">Стоп</button>
     <button id="bPip">Окно поверх игры</button>
-    <label class="btn" style="display:inline-flex;align-items:center">Нарезать из файла<input type="file" id="fAudio" accept="audio/*,video/*" multiple hidden></label>
-    <span id="status">Не слушаю</span>
+    <label class="chk" style="margin:0"><input type="checkbox" id="cAutoPip"> открывать само</label>
+    <span id="status" role="status">Не слушаю</span>
   </div>
+  <div class="row" style="margin-top:10px"><span class="k">Окно торговца: <b id="trState">—</b></span><button class="sm" id="bLearn">Запомнить окно торговца</button><button class="sm" id="bNotTr" hidden>Это не торговец</button><button class="sm" id="bForget" hidden>Забыть</button></div>
+  <dialog id="dlgMap" aria-labelledby="dlgT">
+    <div class="row" style="justify-content:space-between"><h2 id="dlgT" style="margin:0">Карта и режим рейда</h2><button class="sm" id="dlgX" aria-label="Закрыть">✕</button></div>
+    <div class="maps" id="maps"></div>
+    <p class="lead" style="font-size:14px;margin:0">Карта записывается в журнал находок. Когда для группы и размера наберётся 8 отметок, шанс красного считается по ним, и находки с этой карты весят больше.</p>
+    <div class="row" style="margin-top:12px"><button id="dlgSkip">Продолжить без карты</button></div>
+  </dialog>
   <div id="packBanner" class="panel" hidden style="margin-top:14px;border-color:var(--kh)">
     <b>Сначала загрузи звуки.</b> Звуков ящиков на сайте нет — их файл <code>abi-uho-zvuki.json</code> присылают отдельно. Загрузить нужно один раз: дальше они хранятся в этом браузере.
     <div class="row" style="margin-top:10px"><label class="btn" style="display:inline-flex;align-items:center;background:var(--kh);color:#151813;font-weight:500">Загрузить файл со звуками<input type="file" class="impFile" accept=".json,application/json" hidden></label></div>
@@ -121,6 +151,7 @@ code{font-family:"JetBrains Mono",monospace;font-size:13px;background:#0e100c;pa
     <div id="nowItemsWrap" hidden>
       <div class="k" id="sizeLbl">Размер ящика</div>
       <div class="chips" id="sizeChips"></div>
+      <div class="k">Открыл ящик? Отметь, что в нём было, — любой предмет, не только красный. <button class="sm" id="bMiss">Нет в списке</button></div>
       <ul class="items" id="nowItems"></ul>
     </div>
   </section>
@@ -129,45 +160,69 @@ code{font-family:"JetBrains Mono",monospace;font-size:13px;background:#0e100c;pa
     <div class="k">Уровень звука</div>
     <div class="meter"><div id="mFill"></div><div class="mark" id="mBg"></div><div class="mark" id="mThr"></div></div>
     <div class="k" id="mTxt">—</div>
+    <details class="help" style="margin-top:12px"><summary>Настройки</summary>
     <label class="set">Чувствительность, дБ над фоном <span id="vSens"></span><input type="range" id="sSens" min="3" max="30" step="1"></label>
     <label class="set">Тише этого не ловить, дБ <span id="vMin"></span><input type="range" id="sMin" min="-80" max="-20" step="1"></label>
     <label class="set">Длина звука, мс <span id="vCap"></span><input type="range" id="sCap" min="250" max="1200" step="50"></label>
     <label class="set">Порог узнавания, % <span id="vSim"></span><input type="range" id="sSim" min="60" max="95" step="1"></label>
-    <label class="chk"><input type="checkbox" id="cVoice"> Говорить шанс красного голосом («75 процентов»)</label>
-    <label class="chk"><input type="checkbox" id="cBeep"> Пикать (вместе с голосом или вместо него)</label>
-    <label class="set">Сообщать, если шанс красного от, % <span id="vRed"></span><input type="range" id="sRed" min="5" max="100" step="5"></label>
     <label class="chk"><input type="checkbox" id="cVis"> Определять размер ящика по экрану</label>
     <hr style="border:0;border-top:1px solid var(--line);margin:14px 0 4px">
     <label class="chk"><input type="checkbox" id="cRec"> Запись эталонов: каждый пойманный звук → в группу</label>
     <div class="row" style="margin-top:6px"><select id="recG" aria-label="Группа для записи"></select></div>
     <label class="chk"><input type="checkbox" id="cAdv"> После записи переходить к следующей группе</label>
+    <hr style="border:0;border-top:1px solid var(--line);margin:14px 0 8px">
+    <div class="row"><select id="dev" aria-label="Аудиовход" style="max-width:100%"><option value="">Вход: стерео микшер / VB-Cable…</option></select><button class="sm" id="bDev">Слушать вход</button>
+    <label class="btn" style="display:inline-flex;align-items:center;min-height:30px;font-size:13px">Нарезать из файла<input type="file" id="fAudio" accept="audio/*,video/*" multiple hidden></label></div>
+    </details>
   </section>
 </div></div>
 
 <div class="band" style="padding-top:0"><div class="wrap">
-  <div class="row" style="justify-content:space-between"><h2>Пойманные звуки</h2><button class="sm" id="bClr">Очистить</button></div>
+  <details class="more"><summary>Пойманные звуки</summary>
+  <div class="row" style="justify-content:flex-end"><button class="sm" id="bClr">Очистить</button></div>
   <div id="recent"><div class="empty">Пока пусто. Каждый пойманный звук появится здесь — его можно сохранить как эталон нужной группы.</div></div>
+  </details>
 </div></div>
 
 <div class="band" style="padding-top:0"><div class="wrap">
+  <div class="row" style="justify-content:space-between;margin-bottom:8px"><h2 style="margin:0">Мои находки</h2>
+    <div class="row"><select id="jMap" aria-label="Карта"><option value="">Все карты</option></select><select id="jTier" aria-label="Что показывать"><option value="M">Только красные</option><option value="">Все предметы</option></select>
+    <button class="sm" id="bJExp">Экспорт</button><label class="btn sm" style="display:inline-flex;align-items:center;min-height:30px;font-size:13px">Импорт<input type="file" id="fJ" accept=".json,application/json" hidden></label></div></div>
+  <div class="stats" id="jStats"></div>
+  <ul class="jr" id="jList"></ul>
+  <details class="help panel" id="ownBox" style="margin-top:12px"><summary>Добавить предмет, которого нет в списке</summary>
+    <form class="form" id="ownForm" style="margin-top:10px">
+      <label>Название<input type="text" id="oN" maxlength="80" required></label>
+      <label>Звуковая группа<select id="oG"></select></label>
+      <label>Размер<select id="oS"></select></label>
+      <label>Редкость<select id="oT"><option value="M">Красный</option><option value="L">Золотой</option><option value="E">Фиолетовый</option><option value="R">Синий</option><option value="C">Белый</option></select></label>
+      <label>Цена, ₭<input type="number" id="oP" min="0" step="1" placeholder="не знаю"></label>
+      <button class="pri" type="submit">Добавить</button>
+    </form>
+    <div class="chips" id="ownList" style="margin-top:10px"></div></details>
+</div></div>
+
+<div class="band" style="padding-top:0"><div class="wrap">
+  <details class="more"><summary>Каталог: 38 звуковых групп</summary>
   <div class="row" style="justify-content:space-between;margin-bottom:8px">
-    <h2 style="margin:0">Каталог: 38 звуковых групп</h2>
     <div class="row"><span class="k" id="catStat"></span><button class="sm" id="bExp">Экспорт эталонов</button><label class="btn sm" style="display:inline-flex;align-items:center;min-height:30px;font-size:13px">Импорт<input type="file" id="fImp" class="impFile" accept=".json,application/json" hidden></label></div>
   </div>
   <p class="lead">Красная полоса — в группе бывают мифические (красные) предметы. Звуки «взять» и «положить» для каждой группы берутся из файла со звуками. Свои записи из рейда добавляются к ним и повышают точность. Состав групп и цены взяты с abihelper.ru/sounds в ноябре 2026 и могут устареть после патча.</p>
   <div class="cat" id="cat"></div>
+  </details>
 </div></div>
 
 <div class="band"><div class="wrap panel">
-  <details class="help" open>
+  <details class="help">
     <summary>Как пользоваться</summary>
     <ol>
       <li>Открой эту страницу в Chrome или Edge на том же ПК, где запущена игра. Firefox не подойдёт. Чтобы запускать как программу, нажми значок «Установить» справа в адресной строке.</li>
-      <li>«Слушать игру» → выбери <b>окно игры</b> и включи передачу звука. Если у окна нет галочки звука — выбери «Весь экран» и «Поделиться системным звуком» (тогда в звук попадут Discord и музыка, будут лишние срабатывания).</li>
-      <li>Отключи «улучшайзеры» звука: Sonar, Nahimic, Dolby Atmos, Windows Sonic, эквалайзеры — они меняют звук и ломают сравнение.</li>
+      <li>«Слушать игру» → выбери карту и режим → на вкладке «Окно» нажми на <b>окно игры</b> и включи передачу звука. Так Discord и музыка не мешают. Если у окна нет переключателя звука (старый Chrome) — выбери «Весь экран» и системный звук.</li>
+      <li>Новый рейд на другой карте — нажми «Карта: …» и смени её. Останавливать прослушивание не нужно.</li>
+      <li>Отключи «улучшайзеры» звука: Sonar, Nahimic, Dolby Atmos, Windows Sonic, эквалайзеры — они меняют звук и ломают сравнение. Фильтры NVIDIA (Alt+F3) меняют цвета и мешают определять размер — тоже выключи.</li>
       <li>Один раз загрузи файл со звуками <code>abi-uho-zvuki.json</code> (кнопка «Импорт» в каталоге или жёлтая плашка сверху). Записывать самому ничего не нужно. Если какой-то ящик узнаётся плохо, добавь свою запись: в ленте «Пойманные звуки» выбери правильную группу и нажми «В эталон».</li>
-      <li>Нажми «Окно поверх игры» — маленькое окно останется поверх игры, сворачивать игру не нужно (игра должна быть в режиме «Окно без рамки», не «Полный экран»). Можно и без окна: сайт пищит сам.</li>
-      <li>В рейде у торговца хватай ящик, отводи в сторону и отпускай — он вернётся на место. Сайт слышит «взял» и «положил» (оба звука объединяются для точности), определяет размер ящика по экрану и после «положил» говорит итоговый шанс красного по обоим звукам: «75 процентов» . На одиночный «положил» (перенос кнопкой F) и при 0% молчит. Тяни ящики по одному, без двойных кликов. На экране «Последний звук» — группа, предметы и есть ли среди них красные. Кнопки размера приглушают предметы другого размера.</li>
+      <li>Окно поверх игры открывается само после выбора окна игры; если браузер не дал — нажми «Окно поверх игры». Цвета: красный — красный предмет точно есть, оранжевый — возможно да (с процентом), синий — возможно нет (с процентом), зелёный — красного нет, серый — не понял. Ниже список проверенных ящиков по порядку. Игра должна быть в режиме «Окно без рамки», не «Полный экран». При первом запуске открой торговца и нажми в этом окне «Запомнить окно торговца»: дальше сайт слушает только там. Если он принял за торговца другое окно — нажми «Это не торговец».</li>
+      <li>В рейде у торговца хватай ящик, отводи в сторону и отпускай — он вернётся на место. Сайт слышит «взял» и «положил» (оба звука объединяются для точности), определяет размер ящика по экрану и после «положил» показывает итог. Перенос кнопкой F не считается. Тяни ящики по одному, без двойных кликов. На экране «Последний звук» — группа, предметы и есть ли среди них красные. Кнопки размера приглушают предметы другого размера.</li>
       <li>Режим «Запись эталонов» нужен, только если после патча звуки поменяются: выбери группу, дёрни такой ящик — запись сохранится.</li>
       <li>Свои записи хранятся в этом браузере. «Экспорт эталонов» → кинь файл друзьям, они делают «Импорт».</li>
     </ol>
@@ -343,8 +398,8 @@ const CargoVision=(()=>{
   // только ЗЕЛЁНАЯ подсветка (ящик над пустыми клетками). Красная почти совпадает с красным фоном мифических предметов
   // (подсветка 57,17,17 — фон 49,21,17) и путала бы как раз те предметы, что мы ищем.
   const P0=Phint||hintP(img);
-  // только зелёная: красная путается с красным фоном мифических предметов и сменой экранов
-  for(const q of [1]){const mm=tintMask(now,before,q);let c=0;for(let i=0;i<mm.length;i++)c+=mm[i];if(c>=(P0*0.35/ST)**2){cnt=c;m=mm;k=q;break}}if(!m||cnt<(P0*0.35/ST)**2)return null;
+  // зелёная (над пустыми клетками) главнее; красная (над занятыми — у торговца ящики стоят вплотную) — только если зелёной нет
+  for(const q of [1,0]){const mm=tintMask(now,before,q);let c=0;for(let i=0;i<mm.length;i++)c+=mm[i];if(c>=(P0*0.35/ST)**2){cnt=c;m=mm;k=q;break}}if(!m||cnt<(P0*0.35/ST)**2)return null;
   const b=biggestBlob(m,W,H);if(!b||b.n<(P0*0.3/ST)**2)return null;
   // Сетка — от краёв самой подсветки: они всегда лежат на линиях клеток. Длинные прямые края — настоящие,
   // короткие (обрезанные картинкой предмета или подсказкой) — нет. Шаг — ожидаемый, уточняем по противоположным краям.
@@ -392,7 +447,7 @@ const CargoVision=(()=>{
  // ожидаемый размер клетки: ~85 px при ширине 2505–2560 (≈3,35% ширины), но не больше 6,4% высоты
  // есть ли на кадре зелёная подсветка (тогда он не годится как кадр «до»: предмет уже тянут)
  // сравниваем с кадром «до»: зелёный фон предметов по редкости был и раньше, а подсветка — новая
- function hasHighlight(img,t,ref){t=t||tints(img);const m=tintMask(t,ref||null,1);let c=0;for(let i=0;i<m.length;i++)c+=m[i];const P=hintP(img);return c>(P*0.3/ST)**2}
+ function hasHighlight(img,t,ref,greenOnly){t=t||tints(img);const P=hintP(img),need=(P*0.3/ST)**2;for(const k of greenOnly?[1]:[1,0]){const m=tintMask(t,ref||null,k);let c=0;for(let i=0;i<m.length;i++)c+=m[i];if(c>need)return true}return false}
  function hintP(img){return Math.min(img.width*0.0335,img.height*0.064)}
  return{tints,gray,analyze,analyzeGrid,analyzeTint,hintP,hasHighlight}})();
 </script>
@@ -441,6 +496,25 @@ const RAW=[
 ];
 const normSize=s=>{const [a,b]=s.split('x').map(Number);return Math.min(a,b)+'×'+Math.max(a,b)};
 const GROUPS=RAW.map((r,i)=>{const items=r[2].split(';').map(x=>{const [n,s,t,p]=x.split('|');return{n,s:s.replace('x','×'),ns:normSize(s),t,p:+p}});return{g:i+1,d:r[0],file:r[1],items,red:items.filter(x=>x.t==='M').length}});
+/* карты и режимы рейда */
+const MODES={N:'Обычный',L:'Изоляция (Lockdown)',F:'Запретная зона (Forbidden)'};
+const MAPS=[['farm','Ферма','NLF'],['valley','Долина','NL'],['northridge','Нортридж','LF'],['armory','Арсенал','LF'],['tv','Телецентр','LF'],['airport','Аэропорт','LF']];
+const mapName=(m,k)=>{const r=MAPS.find(x=>x[0]===m);return r?r[1]+(MODES[k]?' · '+MODES[k].split(' (')[0]:''):'не указана'};
+const jget=(k,d)=>{try{const v=JSON.parse(localStorage.getItem(k)||'null');return Array.isArray(v)?v:d}catch(e){return d}};
+// свои предметы, которых нет в списке (хранятся в этом браузере)
+const okItem=x=>x&&x.g>=1&&x.g<=38&&typeof x.n==='string'&&x.n.trim()&&/^[1-6]x[1-6]$/.test(x.s)&&['M','L','E','R','C'].includes(x.t);
+let OWN=jget('abiuho-items',[]).filter(okItem);
+function applyOwn(){for(const G of GROUPS){G.items=G.items.filter(x=>!x.own);for(const x of OWN)if(x.g===G.g&&!G.items.some(y=>y.n===x.n))G.items.push({n:x.n,s:x.s.replace('x','×'),ns:normSize(x.s),t:x.t,p:+x.p||0,own:true});G.red=G.items.filter(x=>x.t==='M').length}}
+applyOwn();
+// журнал находок: что на самом деле оказалось в ящике
+let JOURNAL=jget('abiuho-journal',[]).filter(j=>j&&j.g>=1&&j.g<=38&&typeof j.n==='string');
+const saveJ=()=>{try{localStorage.setItem('abiuho-journal',JSON.stringify(JOURNAL))}catch(e){status('Журнал не сохранился: в браузере кончилось место')}};
+const LEARN_MIN=8;   // с какого числа отметок (группа + размер) шанс считается по журналу
+// вес предмета: 1 + сколько раз он выпадал (эта карта и режим — полностью, другие — четверть)
+function itemW(g,n){let w=1;for(const j of JOURNAL)if(j.g===g&&j.n===n)w+=j.map===set.map&&j.mode===set.mode?1:0.25;return w}
+function listChance(g,list){if(!list.length)return{p:0,learn:0};const names=new Set(list.map(x=>x.n)),n=JOURNAL.filter(j=>j.g===g&&names.has(j.n)).length;
+ if(n<LEARN_MIN)return{p:list.filter(x=>x.t==='M').length/list.length,learn:0};
+ let a=0,b=0;for(const x of list){const w=itemW(g,x.n);b+=w;if(x.t==='M')a+=w}return{p:a/b,learn:n}}
 const TIER={M:'Мифический',L:'Легендарный',E:'Эпический',R:'Редкий',C:'Обычный'};
 
 /*DSP*/
@@ -507,7 +581,7 @@ class Detector{
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=n=>n.toLocaleString('ru-RU').replace(/ /g,' ')+' ₭';
-const DEF={sens:6,minDb:-60,capMs:400,minSim:75,beep:false,vis:true,redPct:5,voice:true,rec:false,recG:1,adv:true};
+const DEF={sens:6,minDb:-60,capMs:400,minSim:75,vis:true,rec:false,recG:1,adv:true,map:'',mode:'',autoPip:true};
 let set={...DEF};try{Object.assign(set,JSON.parse(localStorage.getItem('abiuho-set6')||'{}'))}catch(e){}
 set.rec=false;
 const saveSet=()=>{try{localStorage.setItem('abiuho-set6',JSON.stringify(set))}catch(e){}};
@@ -517,7 +591,7 @@ let CAT=[];let RECENT=[];let sizeF='';let lastNow=null;
 /* ===== Хранилище ===== */
 let db=null;
 function openDB(){return new Promise(res=>{try{const r=indexedDB.open('abi-uho2',2);r.onupgradeneeded=()=>{const d=r.result;if(!d.objectStoreNames.contains('cat'))d.createObjectStore('cat',{keyPath:'id'});if(!d.objectStoreNames.contains('pack'))d.createObjectStore('pack')};r.onsuccess=()=>{db=r.result;res()};r.onerror=()=>res()}catch(e){res()}})}
-function dbPut(e){if(!db)return;try{db.transaction('cat','readwrite').objectStore('cat').put({id:e.id,g:e.g,sr:e.sr,pcm:e.pcm.buffer,created:e.created})}catch(_){}}
+function dbPut(e){if(!db)return;try{db.transaction('cat','readwrite').objectStore('cat').put({id:e.id,g:e.g,sr:e.sr,pcm:e.pcm.buffer,created:e.created,kind:e.kind||null})}catch(_){}}
 function dbDel(id){if(!db)return;try{db.transaction('cat','readwrite').objectStore('cat').delete(id)}catch(_){}}
 function packGet(){return new Promise(res=>{if(!db)return res(null);try{const r=db.transaction('pack').objectStore('pack').get('sounds');r.onsuccess=()=>res(r.result||null);r.onerror=()=>res(null)}catch(e){res(null)}})}
 function packPut(v){if(!db)return;try{db.transaction('pack','readwrite').objectStore('pack').put(v,'sounds')}catch(_){}}
@@ -525,7 +599,8 @@ function dbAll(){return new Promise(res=>{if(!db)return res([]);try{const r=db.t
 const toI16=f=>{const o=new Int16Array(f.length);for(let i=0;i<f.length;i++)o[i]=Math.max(-1,Math.min(1,f[i]))*32767;return o};
 const toF32=a=>{const o=new Float32Array(a.length);for(let i=0;i<a.length;i++)o[i]=a[i]/32767;return o};
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
-function addRef(g,f32,sr,id,created){const pcm=toI16(f32);const e={id:id||uid(),g,sr,pcm,created:created||Date.now(),feat:features(f32,sr)};CAT.push(e);return e}
+// kind: 'взять' или 'положить' (у старых своих записей не известно)
+function addRef(g,f32,sr,id,created,kind){const pcm=toI16(f32);const e={id:id||uid(),g,sr,pcm,kind:kind==='взять'||kind==='положить'?kind:null,created:created||Date.now(),feat:features(f32,sr)};CAT.push(e);return e}
 
 /* ===== Распознавание ===== */
 function match(feat){const best={};for(const e of CAT){const s=sim(feat,e.feat);if(!best[e.g]||s>best[e.g].s)best[e.g]={g:e.g,s,kind:e.kind||null}}return Object.values(best).sort((a,b)=>b.s-a.s)}
@@ -540,13 +615,34 @@ function drawSpec(cv,feat){const T=feat.T;if(!T)return;cv.width=T;cv.height=NMEL
 let sizeSel=null;
 // st: ok — размер известен и такие предметы в группе есть; nosuch — ящика такого размера с этим звуком не бывает;
 //     unknown — размер не определился; all — вручную выбрано «Все»
-function view(it){const top=it.matches[0];if(!top)return null;const G=GROUPS[top.g-1],auto=sizeKey(it.size);
- const autoFits=!!auto&&G.items.some(x=>x.ns===auto);let key='',st;
- if(sizeSel==='')st='all';else if(sizeSel){key=sizeSel;st='ok'}else if(auto){key=auto;st=autoFits?'ok':'nosuch'}else st='unknown';
- const list=st==='all'?G.items:st==='ok'?G.items.filter(x=>x.ns===key):[];return{G,top,auto,autoFits,key,st,list,red:list.filter(x=>x.t==='M').length}}
+// Размер ящика уточняет группу: если в самой похожей группе такого размера нет, берём ближайшую, где он есть,
+// но только если она почти так же похожа (у верно узнанных звуков отрыв от второй группы почти всегда больше 0,13)
+const SIZE_GAP=0.10;
+const hasSize=(g,k)=>GROUPS[g-1].items.some(x=>x.ns===k);
+function topOf(it,k){const m=it.matches,top=m[0];if(!top||!k||hasSize(top.g,k))return top;
+ const alt=m.find(x=>hasSize(x.g,k)&&x.s>=MAYBE&&x.s>=top.s-SIZE_GAP);return alt?{...alt,from:top.g}:top}
+// вторая группа почти так же похожа, а шанс красного у неё другой — честно предупреждаем
+function rivalOf(it,top,k){const r=it.matches.find(x=>x.g!==top.g&&x.s>=top.s-0.04&&x.s>=MAYBE&&(!k||hasSize(x.g,k)));if(!r)return null;
+ const sh=g=>{const l=GROUPS[g-1].items.filter(x=>!k||x.ns===k);return listChance(g,l).p};return Math.abs(sh(r.g)-sh(top.g))>0.1?{g:r.g,p:sh(r.g)}:null}
+// st: none — размер не определился, но красных в группе нет вообще
+function view(it,sel=sizeSel){const auto=sizeKey(it.size),top=topOf(it,sel===null?auto:'');if(!top)return null;const G=GROUPS[top.g-1];
+ const autoFits=!!auto&&hasSize(top.g,auto);let key='',st;
+ if(sel==='')st='all';else if(sel){key=sel;st='ok'}else if(auto){key=auto;st=autoFits?'ok':'nosuch'}else st=G.red?'unknown':'none';
+ const list=st==='all'||st==='none'?G.items:st==='ok'?G.items.filter(x=>x.ns===key):[];const c=listChance(top.g,list);
+ const max=st==='unknown'?Math.max(...[...new Set(G.items.map(x=>x.ns))].map(k=>listChance(top.g,G.items.filter(x=>x.ns===k)).p)):c.p;
+ return{G,top,auto,autoFits,key,st,list,red:list.filter(x=>x.t==='M').length,p:c.p,learn:c.learn,max,rival:rivalOf(it,top,key)}}
+// Итог для окна: yes — точно, may — возможно да, mayno — возможно нет, no — нет, q — не понял
+function verdict(it){const V=view(it,null);if(!V||V.top.s<MAYBE)return{c:'q',big:'Не понял',pc:'',note:'потяни ящик ещё раз',V:null};
+ const sure=V.top.s>=set.minSim/100;if(V.st==='nosuch')return{c:'q',big:'Не понял',pc:'',note:'ящика '+V.key+' с таким звуком нет — потяни ещё раз',V,sure};
+ const un=V.st==='unknown',p=un?V.max:V.p,lo=V.rival?Math.min(p,V.rival.p):p,hi=V.rival?Math.max(p,V.rival.p):p,n=x=>x>0&&x<0.01?1:Math.round(x*100);
+ const note=[un?'размер не виден':'',sure?'':'звук узнан неточно',V.rival?'похоже ещё на №'+V.rival.g:''].filter(Boolean).join(' · ');
+ const pc=un?'до '+n(p)+'%':n(lo)===n(hi)?(sure?'':'≈')+n(p)+'%':n(lo)+'–'+n(hi)+'%';
+ if(hi===0)return sure?{c:'no',big:'Красного нет',pc:'0%',note,V,sure}:{c:'mayno',big:'Возможно нет',pc:'≈0%',note,V,sure};
+ if(lo>=0.995&&sure&&!un)return{c:'yes',big:'Красный есть',pc:'100%',note,V,sure};
+ return(lo+hi)/2>=0.5?{c:'may',big:'Возможно да',pc,note,V,sure}:{c:'mayno',big:'Возможно нет',pc,note,V,sure}}
 const stText=V=>V.st==='nosuch'?'Ящика '+V.key+' с таким звуком нет':V.st==='unknown'?visWhy():'';
 // почему размер не определился: выключено, нет картинки экрана или просто не нашли подсветку
-function visWhy(){if(!set.vis)return'Определение размера выключено — включи галочку «Определять размер ящика по экрану»';if(!VIS.latest&&!VIS.video)return'Сайт не видит экран — нажми «Слушать игру» и выбери «Весь экран» со звуком';return'Размер не определился — оттяни ящик на пустые клетки, чтобы появилась подсветка'}
+function visWhy(){if(!set.vis)return'Определение размера выключено — включи галочку «Определять размер ящика по экрану»';if(!VIS.on)return'Сайт не видит экран — нажми «Слушать игру» и выбери окно игры со звуком';return'Размер не определился — оттяни ящик на пустые клетки, чтобы появилась подсветка'}
 const TN={M:['красный','красных'],L:['золотой','золотых'],E:['фиолетовый','фиолетовых'],R:['синий','синих'],C:['белый','белых']};
 // состав: «3 красных · 1 фиолетовый»
 function compo(list){const c={};for(const x of list)c[x.t]=(c[x.t]||0)+1;return['M','L','E','R','C'].filter(t=>c[t]).map(t=>c[t]+' '+(c[t]%10===1&&c[t]%100!==11?TN[t][0]:TN[t][1])).join(' · ')}
@@ -555,23 +651,26 @@ function showNow(it){lastNow=it;const card=$('now');card.classList.remove('red',
  $('nowAlt').textContent=(top&&top.s>=MAYBE?'Другие варианты: ':'')+m.slice(top&&top.s>=MAYBE?1:0,4).map(x=>'№'+x.g+' '+pct(x.s)+'%').join(' · ');
  drawSpec($('nowSpec'),it.feat);putShot($('nowShot'),it.size&&it.size.shot);
  if(!CAT.length){$('nowLabel').textContent='Звук пойман';$('nowSub').textContent='Звуки не загружены — загрузи файл со звуками';$('nowItemsWrap').hidden=true;return}
- if(!top||top.s<MAYBE){$('nowLabel').textContent='Не узнал';$('nowSub').textContent=top?'Ближе всего №'+top.g+' ('+pct(top.s)+'%) — скорее всего, это не звук ящика':'';$('nowItemsWrap').hidden=true;return}
- const V=view(it),G=V.G,sure=top.s>=th,counts=it.merged||!it.kind;card.classList.add(V.red&&sure&&counts?'red':'hit');
- $('nowLabel').innerHTML=(sure?'':'Похоже на ')+'№'+G.g+' · '+esc(G.d)+(V.key?'<span class="sizetag">'+V.key+'</span>':'')+(V.red?'<span class="redtag">КРАСНОЕ '+Math.round(V.red/V.list.length*100)+'% · '+V.red+' из '+V.list.length+'</span>':'');
- let sub=(V.list.length?compo(V.list)+' · ':'')+(sure?'совпадение ':'не уверен, совпадение ')+pct(top.s)+'%'+(stage(it)?' · '+stage(it):'');
+ if(!top||top.s<MAYBE){$('nowLabel').textContent='Не узнал';$('nowSub').textContent=top?'Ближе всего №'+top.g+' ('+pct(top.s)+'%) — скорее всего, это не звук ящика':'';$('nowItemsWrap').hidden=true;renderPip(it);return}
+ const V=view(it),G=V.G,sure=V.top.s>=th,counts=it.merged||!it.kind;card.classList.add(V.red&&sure&&counts?'red':'hit');
+ $('nowLabel').innerHTML=(sure?'':'Похоже на ')+'№'+G.g+' · '+esc(G.d)+(V.key?'<span class="sizetag">'+V.key+'</span>':'')+(V.red?'<span class="redtag">КРАСНОЕ '+Math.round(V.p*100)+'% · '+V.red+' из '+V.list.length+'</span>':'');
+ let sub=(V.list.length?compo(V.list)+' · ':'')+(sure?'совпадение ':'не уверен, совпадение ')+pct(V.top.s)+'%'+(stage(it)?' · '+stage(it):'');
  if(stText(V))sub=stText(V)+' · '+sub;else sub+=V.red?' — может быть красное':' — красного нет';
+ if(V.st==='unknown')sub+=' · красное возможно, до '+Math.round(V.max*100)+'%';if(V.top.from)sub+=' · уточнено по размеру (по звуку ближе №'+V.top.from+')';
+ if(V.rival)sub+=' · спорно с №'+V.rival.g+' ('+Math.round(V.rival.p*100)+'%)';if(V.learn)sub+=' · по журналу, отметок: '+V.learn;
  $('nowSub').textContent=sub;renderItems(it);$('nowItemsWrap').hidden=false;renderPip(it)}
 function renderItems(it){const V=view(it);if(!V)return;const G=V.G,sizes=[...new Set(G.items.map(x=>x.ns))].sort();
  $('sizeLbl').textContent=V.auto?(sizeSel===null?'Размер ящика: '+V.auto+' (по экрану)':'Размер ящика (по экрану было '+V.auto+')'):'Размер ящика: не определился';
  $('sizeChips').innerHTML=['', ...sizes].map(s=>`<button data-s="${s}" class="${s===V.key?'act':''}">${s||'Все'}</button>`).join('');
- $('nowItems').innerHTML=V.list.length?'':`<li><span></span><span class="nm">${esc(stText(V))}</span></li>`;if(V.list.length)$('nowItems').innerHTML=[...V.list].sort((a,b)=>b.p-a.p).map(x=>`<li class="${x.t}"><span class="dot t-${x.t}" title="${TIER[x.t]}"></span><span class="nm">${esc(x.n)}</span><span class="num">${x.s}</span><span class="num">${fmt(x.p)}</span></li>`).join('')}
+ $('nowItems').innerHTML=V.list.length?'':`<li><span></span><span class="nm">${esc(stText(V))}. Выбери размер кнопкой, чтобы увидеть предметы</span></li>`;if(V.list.length)$('nowItems').innerHTML=[...V.list].sort((a,b)=>b.p-a.p).map(x=>`<li class="${x.t}"><span class="dot t-${x.t}" title="${TIER[x.t]}"></span><span class="nm">${esc(x.n)}</span><span class="num">${x.s}</span><span class="num">${x.p?fmt(x.p):'—'}</span><button class="sm" data-n="${esc(x.n)}" title="Отметить, что в ящике был этот предмет">${it.found===x.n?'✓ выпал':'выпал'}</button></li>`).join('')}
+$('nowItems').addEventListener('click',e=>{const b=e.target.closest('button[data-n]');if(b&&lastNow)markFound(lastNow,b.dataset.n)});
 $('sizeChips').addEventListener('click',e=>{const b=e.target.closest('button');if(!b||!lastNow)return;sizeSel=b.dataset.s;showNow(lastNow)});
 
 /* ===== Лента пойманных звуков ===== */
 const groupOpts=sel=>GROUPS.map(G=>`<option value="${G.g}"${G.g===sel?' selected':''}>№${G.g} ${esc(G.d)}${G.red?' ●':''}</option>`).join('');
-function itemTitle(it){const top=it.matches[0];if(!CAT.length)return'<b>Новый звук</b>';if(!top)return'<b>Не узнал</b>';const G=GROUPS[top.g-1];const ok=top.s>=set.minSim/100,may=top.s>=MAYBE;
- const k=sizeKey(it.size),list=k?G.items.filter(x=>x.ns===k):[],red=list.some(x=>x.t==='M');
- const tail=!k?' · размер не определился':!list.length?' · ящика '+k+' с таким звуком нет':red?' · может быть красное':' · красного нет';
+function itemTitle(it){let top=it.matches[0];if(!CAT.length)return'<b>Новый звук</b>';if(!top)return'<b>Не узнал</b>';const k=sizeKey(it.size);top=topOf(it,k);const G=GROUPS[top.g-1];const ok=top.s>=set.minSim/100,may=top.s>=MAYBE;
+ const list=k?G.items.filter(x=>x.ns===k):[],red=list.some(x=>x.t==='M');
+ const tail=!k?(G.red?' · размер не определился':' · красного нет'):!list.length?' · ящика '+k+' с таким звуком нет':red?' · может быть красное':' · красного нет';
  return`<b class="${may&&red?'redtxt':''}">${ok?'':may?'похоже: ':'? '}№${G.g} ${esc(G.d)}</b>${k?' · ящик '+k:''} · ${pct(top.s)}%${may?tail:''}`}
 function makeNode(it){const d=document.createElement('div');d.className='snd';d.dataset.id=it.id;
  const t=new Date(it.t).toLocaleTimeString('ru-RU');const top=it.matches[0];
@@ -587,7 +686,7 @@ $('recent').addEventListener('click',e=>{const b=e.target.closest('button');if(!
  if(b.dataset.a==='play')play(it.seg,it.sr);
  if(b.dataset.a==='frames')saveFrames(it);
  if(b.dataset.a==='del'){RECENT=RECENT.filter(x=>x!==it);row.remove()}
- if(b.dataset.a==='save'){const g=+row.querySelector('select').value;const e2=addRef(g,it.seg,it.sr);dbPut(e2);b.textContent='Сохранено';b.disabled=true;renderCat();refreshTitles()}});
+ if(b.dataset.a==='save'){const g=+row.querySelector('select').value;const e2=addRef(g,it.seg,it.sr,null,null,it.kind);dbPut(e2);b.textContent='Сохранено';b.disabled=true;renderCat();refreshTitles()}});
 $('bClr').onclick=()=>{RECENT=[];$('recent').innerHTML='<div class="empty">Пусто.</div>'};
 
 /* ===== Каталог ===== */
@@ -603,7 +702,7 @@ $('cat').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)r
 
 function b64(u8){let s='';for(let i=0;i<u8.length;i+=0x8000)s+=String.fromCharCode.apply(null,u8.subarray(i,i+0x8000));return btoa(s)}
 function unb64(s){const b=atob(s),u=new Uint8Array(b.length);for(let i=0;i<b.length;i++)u[i]=b.charCodeAt(i);return u}
-$('bExp').onclick=()=>{const data={app:'abi-uho',v:1,items:CAT.filter(e=>!e.builtin).map(e=>({id:e.id,g:e.g,sr:e.sr,created:e.created,pcm:b64(new Uint8Array(e.pcm.buffer))}))};
+$('bExp').onclick=()=>{const data={app:'abi-uho',v:1,items:CAT.filter(e=>!e.builtin).map(e=>({id:e.id,g:e.g,sr:e.sr,created:e.created,kind:e.kind,pcm:b64(new Uint8Array(e.pcm.buffer))}))};
  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(data)],{type:'application/json'}));a.download='abi-uho-etalony.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),5000)};
 async function importFile(e){const f=e.target.files[0];e.target.value='';if(!f)return;try{const d=JSON.parse(await f.text());
  if(d&&d.app==='abi-uho-sounds'&&Array.isArray(d.sounds)){
@@ -611,68 +710,115 @@ async function importFile(e){const f=e.target.files[0];e.target.value='';if(!f)r
   if(!ok.length)throw new Error('в файле нет звуков');
   PACK=ok;packPut({sounds:ok,at:Date.now()});builtinSr=0;status('Загружаю звуки…');await loadBuiltins(S.ctx?S.ctx.sampleRate:48000);
   const n=CAT.filter(x=>x.builtin&&!x.alt).length;status(n?'Звуки загружены: '+n+'. Можно слушать игру':'Не удалось разобрать звуки из файла',!!n);return}
- let n=0;for(const r of (d&&d.items)||[]){if(CAT.some(x=>x.id===r.id)||!(r.g>=1&&r.g<=38))continue;const pcm=new Int16Array(unb64(r.pcm).buffer);const e2=addRef(+r.g,toF32(pcm),+r.sr,String(r.id),r.created);dbPut(e2);n++}
+ let n=0;for(const r of (d&&d.items)||[]){if(CAT.some(x=>x.id===r.id)||!(r.g>=1&&r.g<=38))continue;const pcm=new Int16Array(unb64(r.pcm).buffer);const e2=addRef(+r.g,toF32(pcm),+r.sr,String(r.id),r.created,r.kind);dbPut(e2);n++}
  status('Импортировано своих записей: '+n);renderCat();refreshTitles()}catch(err){status('Не удалось прочитать файл: '+err.message)}}
 document.querySelectorAll('.impFile').forEach(el=>el.addEventListener('change',importFile));
 
 /* ===== Размер ящика по экрану ===== */
-// Кадры берутся из той же трансляции экрана. Вся работа запускается из обработчика звука,
-// потому что таймеры во фоновой вкладке браузер замедляет, а звук — нет.
-const VIS={dbgMap:new Map(),reader:null,latest:null,video:null,canvas:null,clean:null,hl:[],imgs:[],lastHl:-1e12,hlStart:0,next:0,Phist:[],P:0,sr:48000};
-const MAXW=1600;
-function visStart(stream){visStop();const vt=stream.getVideoTracks()[0];if(!vt)return;
+// Кадры разбираются в отдельном потоке (Worker): игра и разбор картинки не тормозят звук.
+// Время кадров и звуков сводится к одним часам (performance.now), потом — к отсчётам звука.
+const VIS={reader:null,video:null,on:false,w:null,busy:false,lastSent:-1e9,vOff:null,hl:[],lastHl:-1e12,Phist:[],P:0,sr:48000,offs:[]};
+const WSRC=String.raw`
+let C=null,X=null,clean=null,lastHl=-1e12,hlStart=0,P=0,resync=false;const RING=[];
+// Окно торговца: отпечаток кадра 96×54 (границы элементов), сравниваем по 48 блокам с запомненными отпечатками
+const SW=96,SH=54,BW=12,BH=9,NB=48;let SC=null,SX=null,TP=[],TN=[],TM=null;
+function sigOf(){if(!SC){SC=new OffscreenCanvas(SW,SH);SX=SC.getContext('2d',{willReadFrequently:true});SX.imageSmoothingQuality='high'}
+ SX.drawImage(C,0,0,SW,SH);const d=SX.getImageData(0,0,SW,SH).data,g=new Float32Array(SW*SH),o=new Uint8Array(SW*SH);for(let i=0;i<g.length;i++)g[i]=d[i*4]*.3+d[i*4+1]*.59+d[i*4+2]*.11;
+ for(let y=1;y<SH;y++)for(let x=1;x<SW;x++){const i=y*SW+x;o[i]=Math.min(255,(Math.abs(g[i]-g[i-1])+Math.abs(g[i]-g[i-SW]))*2)}return o}
+function bncc(a,b,k){const bx=k%8*BW,by=(k/8|0)*BH;let sa=0,sb=0,saa=0,sbb=0,sab=0;for(let y=by;y<by+BH;y++)for(let x=bx;x<bx+BW;x++){const u=a[y*SW+x],v=b[y*SW+x];sa+=u;sb+=v;saa+=u*u;sbb+=v*v;sab+=u*v}
+ const n=BW*BH,va=saa-sa*sa/n,vb=sbb-sb*sb/n;if(va<n*9||vb<n*9)return-1;return(sab-sa*sb/n)/Math.sqrt(va*vb)}
+function eng(a,k){return bncc(a,a,k)>0}
+// какие блоки отличают торговца: есть рисунок, одинаковы на всех запомненных кадрах и не встречаются на «не торговце»
+function trMask(){TM=null;if(!TP.length)return;const all=[],st=[],ds=[];for(let k=0;k<NB;k++){if(!eng(TP[0],k))continue;all.push(k);if(!TP.every(q=>bncc(TP[0],q,k)>0.7))continue;st.push(k);if(!TN.some(q=>TP.some(r=>bncc(r,q,k)>0.6)))ds.push(k)}
+ TM=ds.length>=3?ds:st.length>=3?st:all}
+function trScore(s){if(!TM||!TM.length)return null;let h=0;for(const k of TM)if(TP.some(q=>bncc(q,s,k)>0.7))h++;return h/TM.length}
+function crop(src,r){const[bx,by,bw,bh]=r.box,pad=Math.round(Math.max(bw,bh)*0.35+10);const x0=Math.max(0,bx-pad),y0=Math.max(0,by-pad),w=Math.min(src.width,bx+bw+pad)-x0,h0=Math.min(src.height,by+bh+pad)-y0;
+ const k=Math.min(1,240/Math.max(w,h0)),c=new OffscreenCanvas(Math.round(w*k),Math.round(h0*k)),x=c.getContext('2d');x.drawImage(src,x0,y0,w,h0,0,0,c.width,c.height);x.strokeStyle='#ffd84a';x.lineWidth=2;x.strokeRect((bx-x0)*k,(by-y0)*k,bw*k,bh*k);return c.transferToImageBitmap()}
+onmessage=async e=>{const m=e.data;
+ if(m.cmd==='P'){P=m.P;return}
+ if(m.cmd==='resync'){resync=true;return}
+ if(m.cmd==='tr'){TP=m.pos;TN=m.neg;trMask();if(C&&TM)postMessage({type:'tr',tr:trScore(sigOf())});return}
+ if(m.cmd==='snap'){if(!C){postMessage({type:'snap',id:m.id,sig:null});return}const sig=sigOf();postMessage({type:'snap',id:m.id,sig,blob:await C.convertToBlob({type:'image/jpeg',quality:.9})});return}
+ if(m.cmd==='reset'){clean=null;lastHl=-1e12;for(const f of RING)f.b.close();RING.length=0;return}
+ if(m.cmd==='dbg'){const fr=RING.filter(x=>x.ts>=m.from&&x.ts<=m.to),before=RING.filter(x=>x.ts<m.from).pop();if(!fr.length){postMessage({type:'dbg',id:m.id,blob:null});return}
+  const n=Math.min(5,fr.length),pk=Array.from({length:n},(_,i)=>fr[Math.round(i*(fr.length-1)/Math.max(1,n-1))]),all=[before,...pk].filter(Boolean);
+  const W=all[0].b.width,H=all[0].b.height,c=new OffscreenCanvas(W,H*all.length),x=c.getContext('2d');
+  all.forEach((f,i)=>{x.drawImage(f.b,0,i*H);x.fillStyle='#000a';x.fillRect(0,i*H,420,34);x.fillStyle='#ffd84a';x.font='bold 22px sans-serif';
+   x.fillText(f===before?'ДО ЗВУКА':'кадр '+i+' ('+((f.ts-m.on)/1000).toFixed(2)+' с от звука)'+(f.hl?' · подсветка':''),8,i*H+25)});
+  const blob=await c.convertToBlob({type:'image/jpeg',quality:0.88});postMessage({type:'dbg',id:m.id,blob});return}
+ const fr=m.frame,ts=m.ts;try{const sw=fr.displayWidth||fr.width,sh=fr.displayHeight||fr.height,f=Math.min(1,1600/sw),W=Math.round(sw*f),H=Math.round(sh*f);
+  if(!C||C.width!==W||C.height!==H){C=new OffscreenCanvas(W,H);X=C.getContext('2d',{willReadFrequently:true})}
+  X.drawImage(fr,0,0,W,H);fr.close();const img=X.getImageData(0,0,W,H),t=CargoVision.tints(img),bf=clean;let out={type:'f',ts,hl:false,r:null,tr:TM?trScore(sigOf()):null};
+  // кадр без новой зелени — новый «до»; «зелень» дольше 6 с — уже другой экран, а не подсветка
+  // после итога действия (ящик положили) берём новый «до»: на экране мог появиться цветной фон положенного предмета
+  if(resync&&!CargoVision.hasHighlight(img,t,null,true)){resync=false;clean={ts,t}}
+  else if(!bf||!CargoVision.hasHighlight(img,t,bf.t)||ts-bf.ts>6000&&ts-hlStart>6000){clean={ts,t}}
+  else{if(ts-lastHl>600)hlStart=ts;lastHl=ts;out.hl=true;const r=CargoVision.analyzeTint(img,bf.t,P||CargoVision.hintP(img),null,t);
+   if(r){out.r={w:r.w,h:r.h,P:r.P,box:r.box,conf:r.conf,how:r.how,color:r.color};out.shot=crop(C,r)}}
+  const k=Math.min(1,1280/W);const b=await createImageBitmap(C,{resizeWidth:Math.round(W*k),resizeHeight:Math.round(H*k)});RING.push({ts,b,hl:out.hl});while(RING.length>30)RING.shift().b.close();
+  postMessage(out,out.shot?[out.shot]:[])}catch(err){try{fr.close()}catch(_){}postMessage({type:'f',ts,hl:false,r:null,err:String(err)})}}
+`;
+function visWorker(){if(VIS.w)return VIS.w;const s=document.scripts[0].textContent,i=s.indexOf('const CargoVision=(()=>{'),j=s.indexOf('return{tints,gray,analyze,analyzeGrid,analyzeTint,hintP,hasHighlight}})();');
+ const src=s.slice(i,j)+'return{tints,gray,analyze,analyzeGrid,analyzeTint,hintP,hasHighlight}})();\n'+WSRC;
+ const w=new Worker(URL.createObjectURL(new Blob([src],{type:'text/javascript'})));w.onmessage=onVisMsg;w.onerror=e=>logEv('worker-ошибка',{m:e.message});VIS.w=w;return w}
+/* ===== Окно торговца ===== */
+const TR={pos:[],neg:[],score:null,tm:0,on:false};const TR_TH=0.5,TR_HOLD=1500;
+try{const d=JSON.parse(localStorage.getItem('abiuho-trader')||'null');if(d)for(const k of['pos','neg'])TR[k]=(d[k]||[]).map(unb64).filter(u=>u.length===5184)}catch(e){}
+function trSave(){try{localStorage.setItem('abiuho-trader',JSON.stringify({pos:TR.pos.map(b64),neg:TR.neg.map(b64)}))}catch(e){}trSend()}
+function trSend(){TR.score=null;TR.on=false;clearTimeout(TR.tm);TR.tm=0;if(VIS.w)VIS.w.postMessage({cmd:'tr',pos:TR.pos,neg:TR.neg});renderTr()}
+// кадры приходят, только когда картинка меняется: состояние держится до кадра «не торговец» + TR_HOLD мс
+function trFrame(v){if(v==null)return;TR.score=v;const set_=on=>{if(on!==TR.on){TR.on=on;logEv(on?'у торговца':'ушёл от торговца',{score:TR.score});renderTr()}};
+ if(v>=TR_TH){clearTimeout(TR.tm);TR.tm=0;set_(true)}else if(TR.on&&!TR.tm)TR.tm=setTimeout(()=>{TR.tm=0;set_(false)},TR_HOLD)}
+// пока окно торговца не запомнено или экрана не видно — слушаем всё
+function inTrader(){return!TR.pos.length||!VIS.on||TR.on}
+function trText(){return!S.ctx?'не слушаю':!TR.pos.length?'торговец не запомнен':!VIS.on?'экрана не видно':TR.on?'у торговца':'не у торговца'}
+let snapId=0;function trSnap(){return new Promise(ok=>{if(!VIS.on||!VIS.w)return ok(null);const id=++snapId;DBGW.set('s'+id,{ok});VIS.w.postMessage({cmd:'snap',id});setTimeout(()=>{if(DBGW.delete('s'+id))ok(null)},4000)})}
+// «Запомнить окно торговца» / «Это не торговец»
+async function trLearn(neg){const m=await trSnap();if(!m||!m.sig){status('Сначала «Слушать игру» и выбери окно игры');return false}
+ const L=neg?TR.neg:TR.pos;L.unshift(m.sig);if(L.length>6)L.pop();trSave();
+ if(!neg&&m.blob){const a=document.createElement('a');a.href=URL.createObjectURL(m.blob);a.download='abi-uho-torgovec-'+new Date().toLocaleTimeString('ru-RU').replace(/:/g,'-')+'.jpg';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),5000)}
+ status(neg?'Запомнил: это не торговец':'Окно торговца запомнено, кадр сохранён в загрузки',true);return true}
+function renderTr(){$('trState').textContent=trText();$('trState').className=TR.on&&S.ctx?'on':'';$('bForget').hidden=!TR.pos.length;$('bNotTr').hidden=!TR.on;renderPip(lastNow)}
+// перевод времени: мс (performance.now) ↔ отсчёты звука
+function toSamp(ms){return S.offP==null?-1e12:Math.round((ms-S.offP)*VIS.sr/1000)}
+function toMs(sm){return S.offP==null?performance.now():sm*1000/VIS.sr+S.offP}
+function onVisMsg(e){const m=e.data;
+ if(m.type==='dbg'){const q=DBGW.get(m.id);DBGW.delete(m.id);if(q)q.ok(m.blob);return}
+ if(m.type==='tr'){trFrame(m.tr);return}
+ if(m.type==='snap'){const q=DBGW.get('s'+m.id);DBGW.delete('s'+m.id);if(q)q.ok(m);return}
+ VIS.busy=false;if(m.err)logEv('кадр-ошибка',{m:m.err});trFrame(m.tr);if(!m.hl)return;const at=toSamp(m.ts);
+ if(at-VIS.lastHl>0.6*VIS.sr)logEv('подсветка началась');VIS.lastHl=at;
+ if(m.r)m.r.shot=m.shot||null;VIS.hl.push({at,r:m.r});while(VIS.hl.length>80)VIS.hl.shift()}
+function visStart(stream){visStop();const vt=stream.getVideoTracks()[0];if(!vt||!set.vis)return;VIS.on=true;const w=visWorker();w.postMessage({cmd:'reset'});trSend();
+ // кадр отдаём в поток не чаще раза в 0,15 с и только если он свободен — иначе пропускаем (без очереди и задержек)
+ const send=(fr,tsMs)=>{const now=performance.now();if(!VIS.busy&&now-VIS.lastSent>=150&&set.vis){VIS.busy=true;VIS.lastSent=now;w.postMessage({frame:fr,ts:tsMs},[fr])}else fr.close();
+  if(VIS.busy&&now-VIS.lastSent>2000)VIS.busy=false};
  if('MediaStreamTrackProcessor' in window){try{const rd=new MediaStreamTrackProcessor({track:vt}).readable.getReader();VIS.reader=rd;
-  (async()=>{try{for(;;){const{value,done}=await rd.read();if(done)break;if(VIS.latest)VIS.latest.close();VIS.latest=value}}catch(e){}})();return}catch(e){}}
- const v=document.createElement('video');v.muted=true;v.playsInline=true;v.srcObject=new MediaStream([vt]);v.play().catch(()=>{});VIS.video=v}
-function visStop(){try{VIS.reader&&VIS.reader.cancel()}catch(e){}if(VIS.latest){try{VIS.latest.close()}catch(e){}}
- DBGR.length=0;DBGQ.length=0;if(VIS.video){VIS.video.srcObject=null}VIS.reader=VIS.latest=VIS.video=null;VIS.clean=null;VIS.hl=[];VIS.imgs=[];VIS.lastHl=-1e12;VIS.next=0}
-function visFrame(){const s=VIS.latest||VIS.video;if(!s)return null;const sw=s.displayWidth||s.videoWidth,sh=s.displayHeight||s.videoHeight;if(!sw||!sh)return null;
- const f=Math.min(1,MAXW/sw),W=Math.round(sw*f),H=Math.round(sh*f);const c=VIS.canvas||(VIS.canvas=document.createElement('canvas'));if(c.width!==W||c.height!==H){c.width=W;c.height=H}
- const x=c.getContext('2d',{willReadFrequently:true});try{x.drawImage(s,0,0,W,H)}catch(e){return null}return x.getImageData(0,0,W,H)}
-// Экран смотрим всё время (кадр каждые 0,15 с). Зелёная подсветка клеток появляется, только пока предмет тянут мышкой,
-// и совпадает с ним по размеру. Кадр без подсветки — «до» (с ним сравниваем, чтобы не путать с зелёным фоном предметов).
-// Кадры с подсветкой разбираем сразу и храним итог ~8 с: размер берём из кадров между «взял» и «положил»,
-// поэтому он готов в момент «положил» — без ожидания. Работа идёт из обработчика звука: фоновую вкладку браузер не тормозит.
-function visTick(total,sr){if(!set.vis||(!VIS.latest&&!VIS.video))return;VIS.sr=sr;if(total<VIS.next)return;VIS.next=total+Math.round(0.15*sr);
- const img=visFrame();if(!img)return;dbgRing(total,img);const t=CargoVision.tints(img),bf=VIS.clean;
- // кадр без новой зелени — новый «до»; если «зелень» держится больше 6 с, это уже другой экран, а не подсветка
- if(!bf||!CargoVision.hasHighlight(img,t,bf.t)||total-bf.at>6*sr&&total-VIS.hlStart>6*sr){VIS.clean={at:total,img,t,g:null};return}
- if(total-VIS.lastHl>0.6*sr){VIS.hlStart=total;logEv('подсветка началась')}VIS.lastHl=total;let r=null;
- if(!bf.g)bf.g=CargoVision.gray(bf.img);r=CargoVision.analyzeTint(img,bf.t,VIS.P||CargoVision.hintP(img),bf.g,t);if(r)r.shot=cropShot(r)
- VIS.hl.push({at:total,r});while(VIS.hl.length&&VIS.hl[0].at<total-8*sr)VIS.hl.shift();
- VIS.imgs.push({at:total,img,bf,r});if(VIS.imgs.length>8)VIS.imgs.shift()}
+  (async()=>{try{for(;;){const{value,done}=await rd.read();if(done)break;const now=performance.now(),tsu=value.timestamp/1000;
+   // время снятия кадра: метка кадра + наименьшая замеченная задержка доставки
+   VIS.offs.push(now-tsu);if(VIS.offs.length>60)VIS.offs.shift();const off=Math.min(...VIS.offs);send(value,isFinite(tsu)&&tsu>0?tsu+off:now)}}catch(e){}})();return}catch(e){}}
+ const v=document.createElement('video');v.muted=true;v.playsInline=true;v.srcObject=new MediaStream([vt]);v.play().catch(()=>{});VIS.video=v;
+ VIS.iv=setInterval(async()=>{if(VIS.busy||!v.videoWidth)return;try{const fr=new VideoFrame(v);send(fr,performance.now())}catch(e){}},150)}
+function visStop(){VIS.on=false;try{VIS.reader&&VIS.reader.cancel()}catch(e){}clearInterval(VIS.iv);if(VIS.video){VIS.video.srcObject=null}
+ VIS.reader=VIS.video=null;VIS.hl=[];VIS.lastHl=-1e12;VIS.busy=false;VIS.offs=[];DBGQ.length=0;if(VIS.w)VIS.w.postMessage({cmd:'reset'})}
 // предмет тянули (была подсветка) в промежутке [a, b] (в отсчётах звука)
-function dragged(a,b){return VIS.hl.some(x=>x.at>=a&&x.at<=b)}
+function dragged(a,b){return VIS.hl.filter(x=>x.at>=a&&x.at<=b).length>=2}
 // размер за промежуток: тот, что встречался чаще всего (подсветка может на миг обрезаться картинкой или краем)
 function dragSize(a,b){const rs=VIS.hl.filter(x=>x.at>=a&&x.at<=b&&x.r).map(x=>x.r);return bestRes(rs)}
-function dragDbg(a,b,br){const fr=VIS.imgs.filter(x=>x.at>=a&&x.at<=b);if(!fr.length)return null;const pick=fr.length<=4?fr:[fr[0],fr[fr.length>>1],fr[fr.length-1]];
- return dbgBlob(pick[0].bf&&pick[0].bf.img,pick.map(x=>x.img),br)}
 function bestRes(rs){if(!rs.length)return null;const cnt={};for(const r of rs){const k=sizeKey(r);cnt[k]=(cnt[k]||0)+1}
  const top=Object.keys(cnt).sort((a,b)=>cnt[b]-cnt[a]||b.split('×').reduce((p,v)=>p*v,1)-a.split('×').reduce((p,v)=>p*v,1))[0];
  const r=rs.filter(x=>sizeKey(x)===top).sort((a,b)=>b.conf-a.conf)[0];r.seen=cnt[top];r.frames=rs.length;
- VIS.Phist.push(r.P);if(VIS.Phist.length>15)VIS.Phist.shift();const s=[...VIS.Phist].sort((a,b)=>a-b);if(s.length>=3)VIS.P=s[s.length>>1];return r}
+ VIS.Phist.push(r.P);if(VIS.Phist.length>15)VIS.Phist.shift();const s=[...VIS.Phist].sort((a,b)=>a-b);if(s.length>=3&&VIS.P!==s[s.length>>1]){VIS.P=s[s.length>>1];VIS.w&&VIS.w.postMessage({cmd:'P',P:VIS.P})}return r}
 // дописать размер в строку ленты
 function applySize(it,a,b){if(!set.vis)return;const br=dragSize(a,b);if(!br)return;it.size=br;
  const el=it.node&&it.node.querySelector('.ttl');if(el)el.innerHTML=itemTitle(it);putShot(it.node&&it.node.querySelector('.shot'),br.shot)}
 function visTrig(){}
-// Кадры для разбора: всегда держим ~4 с уменьшенных кадров; у каждого звука через 1,2 с после него
-// сохраняем картинку «до» + кадры вокруг звука — даже если подсветки не было (так видно, что на экране)
-const DBGR=[];let dbgCv=null;const DBGQ=[];
-function dbgRing(total,img){if(!dbgCv)dbgCv=document.createElement('canvas');const k=Math.min(1,960/img.width),w=Math.round(img.width*k),hh=Math.round(img.height*k);
- const src=VIS.canvas;if(!src)return;const c=document.createElement('canvas');c.width=w;c.height=hh;c.getContext('2d').drawImage(src,0,0,w,hh);
- DBGR.push({at:total,c});while(DBGR.length>28)DBGR.shift();
- while(DBGQ.length&&total>=DBGQ[0].due){const q=DBGQ.shift();q.it.dbg=dbgFrom(q.from,total,q.it.size)}}
-function dbgLater(it,on,sr){if(!set.vis||(!VIS.latest&&!VIS.video))return;DBGQ.push({it,from:on-Math.round(0.6*sr),due:on+Math.round(1.6*sr)})}
-function dbgFrom(a,b,res){const fr=DBGR.filter(x=>x.at>=a&&x.at<=b);const before=DBGR.filter(x=>x.at<a).pop();if(!fr.length)return null;
- const n=Math.min(5,fr.length),pick=Array.from({length:n},(_,i)=>fr[Math.round(i*(fr.length-1)/Math.max(1,n-1))]);const all=[before,...pick].filter(Boolean);
- return new Promise(ok=>{try{const W=all[0].c.width,H=all[0].c.height,c=document.createElement('canvas');c.width=W;c.height=H*all.length;const x=c.getContext('2d');
-  all.forEach((f,i)=>{x.drawImage(f.c,0,i*H);x.fillStyle='#000a';x.fillRect(0,i*H,300,30);x.fillStyle='#ffd84a';x.font='bold 18px sans-serif';x.fillText(f===before?'ДО ЗВУКА':'кадр '+i+' ('+((f.at-a)/(VIS.sr||48000)-0.6).toFixed(2)+' с от звука)',8,i*H+21)});
-  c.toBlob(b=>ok(b),'image/jpeg',0.9)}catch(e){ok(null)}})}
-// картинка вокруг найденного ящика с рамкой — чтобы было видно, какой ящик тянули
-function cropShot(r){const src=VIS.canvas;if(!src)return null;const[bx,by,bw,bh]=r.box,pad=Math.round(Math.max(bw,bh)*0.35+10);
- const x0=Math.max(0,bx-pad),y0=Math.max(0,by-pad),w=Math.min(src.width,bx+bw+pad)-x0,h0=Math.min(src.height,by+bh+pad)-y0;
- const k=Math.min(1,240/Math.max(w,h0)),c=document.createElement('canvas');c.width=Math.round(w*k);c.height=Math.round(h0*k);
- const x=c.getContext('2d');x.drawImage(src,x0,y0,w,h0,0,0,c.width,c.height);x.strokeStyle='#ffd84a';x.lineWidth=2;x.strokeRect((bx-x0)*k,(by-y0)*k,bw*k,bh*k);return c}
+// Кадры для разбора: поток держит ~4,5 с кадров; у каждого звука через 1,6 с после него
+// просим картинку «до» + 5 кадров вокруг звука — даже если подсветки не было
+const DBGQ=[],DBGW=new Map();let dbgId=0;
+function dbgLater(it,on,sr){if(!VIS.on||!VIS.w)return;DBGQ.push({it,on,due:on+Math.round(1.6*sr)})}
+function dbgPump(total){while(DBGQ.length&&total>=DBGQ[0].due){const q=DBGQ.shift(),id=++dbgId,onMs=toMs(q.on);
+ q.it.dbg=new Promise(ok=>{DBGW.set(id,{ok});VIS.w.postMessage({cmd:'dbg',id,from:onMs-700,to:onMs+1600,on:onMs});setTimeout(()=>{if(DBGW.has(id)){DBGW.delete(id);ok(null)}},8000)})}}
 const sizeKey=r=>r?normSize(r.w+'x'+r.h):'';
 function putShot(cv,shot){if(!cv)return;if(!shot){cv.hidden=true;return}cv.width=shot.width;cv.height=shot.height;cv.getContext('2d').drawImage(shot,0,0);cv.hidden=false}
 
@@ -680,27 +826,8 @@ function putShot(cv,shot){if(!cv)return;if(!shot){cv.hidden=true;return}cv.width
 function status(t,on){const s=$('status');s.textContent=t;s.classList.toggle('on',!!on)}
 function play(f32,sr){const c=S.ctx||(S.pctx||(S.pctx=new AudioContext()));try{c.resume()}catch(e){}const b=c.createBuffer(1,f32.length,sr);b.copyToChannel(f32,0);const s=c.createBufferSource();s.buffer=b;s.connect(c.destination);s.start();
  if(S.det&&c===S.ctx)S.det.mute=S.det.total+Math.round((f32.length/sr+0.5)*S.det.sr)}
-// сигнал: чем выше шанс, тем выше тон; при 100% — три раза
-function beep(p){if(!S.ctx)return;const c=S.ctx,t=c.currentTime,n=p>=0.99?3:2,f=880+Math.round(p*620);
- for(let k=0;k<n;k++){const o=c.createOscillator(),g=c.createGain();o.frequency.value=f;const t0=t+k*0.18;g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(0.25,t0+0.01);g.gain.exponentialRampToValueAtTime(0.0001,t0+0.14);o.connect(g).connect(c.destination);o.start(t0);o.stop(t0+0.15)}
- muteFor(0.9)}
-function muteFor(sec){if(S.det)S.det.mute=Math.max(S.det.mute,S.det.total+Math.round(sec*S.det.sr))}
-// голос: «75 процентов». Русский голос Windows или Chrome; без него — писк
-let ruVoice=null;function pickVoice(){try{const vs=speechSynthesis.getVoices();ruVoice=vs.find(v=>/^ru/i.test(v.lang)&&/google/i.test(v.name))||vs.find(v=>/^ru/i.test(v.lang))||null}catch(e){}}
-if('speechSynthesis' in window){pickVoice();speechSynthesis.onvoiceschanged=pickVoice}
-function percentWord(n){const a=n%100,b=n%10;if(a>=11&&a<=14)return'процентов';if(b===1)return'процент';if(b>=2&&b<=4)return'процента';return'процентов'}
-let spokeAt=0;
-function say(text){if(!('speechSynthesis' in window)||!ruVoice)return false;try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(text);u.voice=ruVoice;u.lang=ruVoice.lang;u.rate=1.2;speechSynthesis.speak(u);spokeAt=Date.now();return true}catch(e){return false}}
-let lastAlert={g:0,key:'',pct:-1,at:0};
-// шанс красного = доля красных среди предметов этой группы (и этого размера ящика, если он определился)
-function redChance(it){const top=it.matches[0],V=view(it);if(!top||top.s<MAYBE||!V||V.st!=='ok'||!V.list.length)return null;
- return{V,top,p:V.red/V.list.length,sure:top.s>=set.minSim/100}}
-// говорим процент, если он не ниже порога; при 0% — тишина. Один ящик — одна фраза, если процент не уточнился
-function alertRed(it){const c=redChance(it);if(!c||!c.sure||!c.V.red)return;const n=Math.round(c.p*100);if(n<set.redPct)return;
- const now=Date.now(),same=lastAlert.g===c.V.G.g&&lastAlert.key===c.V.key&&now-lastAlert.at<3500;if(same&&lastAlert.pct===n)return;
- lastAlert={g:c.V.G.g,key:c.V.key,pct:n,at:now};
- const spoken=set.voice&&say(n+' '+percentWord(n));if(set.beep||(set.voice&&!spoken))beep(c.p);
- document.title='● Красное '+n+'% — Ухо торговца';setTimeout(()=>document.title='Ухо торговца — ABI',4000)}
+// заголовок вкладки — короткий итог
+function alertRed(it){const d=verdict(it);if(d.c!=='yes'&&d.c!=='may')return;document.title='● '+d.big+' '+d.pc+' — Ухо торговца';setTimeout(()=>document.title='Ухо торговца — ABI',4000)}
 // «взял» и «положил» одного ящика: объединяем два звука — среднее сходство по каждой группе
 // Пара «взял → положил» одного ящика. «Положил» без «взял» (перенос кнопкой F) не считается.
 let pick=null,lastGood=0,lastSnd=null;
@@ -712,7 +839,7 @@ function mergePut(pk,put){const pm=new Map(put.matches.map(x=>[x.g,x.s]));pk.sin
  pk.merged=true;pk.putSeg=put.seg;RECENT=RECENT.filter(x=>x!==put);put.node&&put.node.remove();
  const t=pk.node&&pk.node.querySelector('.meta');if(t)t.textContent=t.textContent.replace(' · «взял»','')+' · «взял» → «положил»';
  const el=pk.node&&pk.node.querySelector('.ttl');if(el)el.innerHTML=itemTitle(pk)}
-function onLive(seg,sr,on){sizeSel=null;const it=addRecent(seg,sr,'игра',null);if(it&&on!=null)dbgLater(it,on,sr);logEv('звук',{on,top:it?it.matches.slice(0,3).map(x=>[x.g,x.kind,+x.s.toFixed(2)]):'короткий',pick:!!pick,hlLast:VIS.lastHl});if(!it)return;it.on=on;
+function onLive(seg,sr,on){if(!set.rec&&!pick&&!inTrader()){logEv('звук не у торговца — пропуск',{on,score:TR.score});return}sizeSel=null;const it=addRecent(seg,sr,'игра',null);if(it&&on!=null)dbgLater(it,on,sr);logEv('звук',{on,top:it?it.matches.slice(0,3).map(x=>[x.g,x.kind,+x.s.toFixed(2)]):'короткий',pick:!!pick,hlLast:VIS.lastHl});if(!it)return;it.on=on;
  if(set.rec){const e2=addRef(set.recG,seg,sr);dbPut(e2);it.node.querySelector('[data-a=save]').textContent='Сохранено';it.node.querySelector('select').value=set.recG;
   status('Эталон записан в №'+set.recG,true);if(set.adv&&set.recG<38){set.recG++;$('recG').value=set.recG;saveSet()}renderCat();refreshTitles();return}
  const top0=it.matches[0],now=Date.now(),good=top0&&top0.s>=MAYBE,SR=sr,ON=on!=null?on:(S.det?S.det.total:0);
@@ -720,8 +847,6 @@ function onLive(seg,sr,on){sizeSel=null;const it=addRecent(seg,sr,'игра',nul
  if(lastSnd&&ON-lastSnd.on<0.5*SR&&ON>lastSnd.on){const same=simGK(it.feat,lastSnd.g,lastSnd.kind),pair=simGK(it.feat,lastSnd.g,lastSnd.kind==='взять'?'положить':'взять');
   logEv('хвост?',{same:+same.toFixed(2),pair:+pair.toFixed(2)});if(same>=0.6&&same>=pair+0.04){logEv('выкинут как хвост');RECENT=RECENT.filter(x=>x!==it);it.node&&it.node.remove();return}}
  if(good)lastSnd={on:ON,g:top0.g,kind:top0.kind};
- // не узнанный звук сразу после нашей же фразы — скорее всего, это и есть фраза: экран не трогаем
- if(!good&&now-spokeAt<2500&&!pick)return;
  // идёт действие («взял» был ≤ 4,5 с назад): следующий звук — это отпускание
  if(pick&&now-pick.at<4500){const pk=pick.it,pg=pk.matches[0].g;
   if(!(good&&top0.kind==='взять'&&top0.g!==pg)){
@@ -740,8 +865,9 @@ function onLive(seg,sr,on){sizeSel=null;const it=addRecent(seg,sr,'игра',nul
  if(set.vis&&dragged(a,b)){it.merged=true;const t=it.node&&it.node.querySelector('.meta');if(t)t.textContent+=' · тянул → «положил»';finish(it,a,b);return}
  logEv('положил без взял — пропуск');const t=it.node&&it.node.querySelector('.meta');if(t)t.textContent+=' · «положил» без «взял» — пропущен';showNow(it)}
 // итог действия: размер по кадрам, пока тянули, затем экран и голос
-let lastFin={it:null,at:0,on:-1e12};
-function finish(it,a,b){logEv('итог',{g:it.matches[0].g,a,b,hl:VIS.hl.filter(x=>x.at>=a&&x.at<=b).map(x=>x.r?x.r.w+'x'+x.r.h:'-')});applySize(it,a,b);lastFin={it,at:Date.now(),on:b};showNow(it);alertRed(it)}
+let lastFin={it:null,at:0,on:-1e12};const DONE=[];let doneNo=0;   // проверенные ящики — список в окне поверх игры
+function clearDone(){DONE.length=0;doneNo=0;pick=null;lastNow=null;renderPip(null)}
+function finish(it,a,b){if(VIS.w)VIS.w.postMessage({cmd:'resync'});logEv('итог',{g:it.matches[0].g,a,b,hl:VIS.hl.filter(x=>x.at>=a&&x.at<=b).map(x=>x.r?x.r.w+'x'+x.r.h:'-')});applySize(it,a,b);lastFin={it,at:Date.now(),on:b};if(!it.no)it.no=++doneNo;DONE.unshift(it);if(DONE.length>30)DONE.pop();showNow(it);alertRed(it)}
 // второй звук не разобрать (наложился, тихий) или его не было — итог по «взял»
 function releaseOnly(pk,put,how){pk.merged=true;if(put){RECENT=RECENT.filter(x=>x!==put);put.node&&put.node.remove()}
  const t=pk.node&&pk.node.querySelector('.meta');if(t)t.textContent=t.textContent.replace(' · «взял»','')+' · «взял» → '+how;const el=pk.node&&pk.node.querySelector('.ttl');if(el)el.innerHTML=itemTitle(pk)}
@@ -762,17 +888,68 @@ function saveLog(){if(!REC.buf||!REC.n){status('Нечего сохранять:
  dl(new Blob([hdr.buffer,pcm.buffer],{type:'audio/wav'}),'abi-uho-zvuk-'+stamp+'.wav');setTimeout(()=>dl(new Blob([JSON.stringify(meta)],{type:'application/json'}),'abi-uho-log-'+stamp+'.json'),400);
  status('Сохранено в загрузки: запись звука и журнал',true)}
 $('bLog').onclick=saveLog;
+// часы звука: время (performance.now) начала этого куска звука — по часам звуковой карты, а не по тому,
+// когда браузер успел его обработать (если вкладка занята, обработка может отставать — время от этого не съезжает)
+function audioClock(e,total,sr,n){VIS.sr=sr;let ms;try{const o=S.ctx.getOutputTimestamp();ms=o&&o.performanceTime?o.performanceTime+(e.playbackTime-o.contextTime)*1000-2*n/sr*1000:performance.now()-n/sr*1000}catch(_){ms=performance.now()-n/sr*1000}
+ const off=ms-total/sr*1000;S.offP=S.offP==null?off:S.offP*0.9+off*0.1}
 function stop(){try{S.proc&&S.proc.disconnect()}catch(e){}try{S.src&&S.src.disconnect()}catch(e){}if(S.stream)S.stream.getTracks().forEach(t=>t.stop());if(S.ctx)S.ctx.close().catch(()=>{});
- S.ctx=S.stream=S.proc=S.src=S.det=null;visStop();status('Не слушаю')}
-function attach(stream,label){stop();pick=null;lastSnd=null;LOG=[];REC.n=0;lastFin={it:null,at:0,on:-1e12};const ctx=new AudioContext();S.ctx=ctx;S.stream=stream;if(ctx.sampleRate!==builtinSr)loadBuiltins(ctx.sampleRate);
+ S.ctx=S.stream=S.proc=S.src=S.det=null;visStop();status('Не слушаю');renderTr()}
+function attach(stream,label){stop();pick=null;lastSnd=null;LOG=[];REC.n=0;S.offP=null;lastFin={it:null,at:0,on:-1e12};const ctx=new AudioContext();S.ctx=ctx;S.stream=stream;if(ctx.sampleRate!==builtinSr)loadBuiltins(ctx.sampleRate);
  S.det=new Detector(ctx.sampleRate,()=>set,onLive);visStart(stream);
  const src=ctx.createMediaStreamSource(stream),proc=ctx.createScriptProcessor(1024,2,1);
- proc.onaudioprocess=e=>{const ib=e.inputBuffer,a=ib.getChannelData(0),b=ib.numberOfChannels>1?ib.getChannelData(1):a,m=new Float32Array(a.length);for(let i=0;i<a.length;i++)m[i]=(a[i]+b[i])*0.5;if(S.det){recFeed(m,S.det.sr);S.det.feed(m);visTick(S.det.total,S.det.sr);pickTick(S.det.total,S.det.sr)}e.outputBuffer.getChannelData(0).fill(0)};
+ proc.onaudioprocess=e=>{const ib=e.inputBuffer,a=ib.getChannelData(0),b=ib.numberOfChannels>1?ib.getChannelData(1):a,m=new Float32Array(a.length);for(let i=0;i<a.length;i++)m[i]=(a[i]+b[i])*0.5;if(S.det){recFeed(m,S.det.sr);audioClock(e,S.det.total,S.det.sr,a.length);S.det.feed(m);dbgPump(S.det.total);pickTick(S.det.total,S.det.sr)}e.outputBuffer.getChannelData(0).fill(0)};
  src.connect(proc);proc.connect(ctx.destination);S.src=src;S.proc=proc;
- stream.getTracks().forEach(t=>t.addEventListener('ended',()=>{if(S.stream===stream)stop()}));status('Слушаю: '+label,true)}
-$('bDisp').onclick=async()=>{try{const st=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:{ideal:30,max:30}},audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false},systemAudio:'include',selfBrowserSurface:'exclude'});
- if(!st.getAudioTracks().length){st.getTracks().forEach(t=>t.stop());status('Звук не передан: при выборе включи передачу звука (или «Весь экран» + системный звук)');return}
- attach(st,'звук и экран игры')}catch(e){status('Не получилось: '+e.message)}};
+ stream.getTracks().forEach(t=>t.addEventListener('ended',()=>{if(S.stream===stream)stop()}));status('Слушаю: '+label,true);renderTr()}
+// окно игры со звуком только этого окна (windowAudio — новый Chrome; старый Chrome незнакомую настройку пропускает)
+async function startCapture(){let st;try{st=await navigator.mediaDevices.getDisplayMedia({video:{displaySurface:'window',frameRate:{ideal:30,max:30}},audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false},systemAudio:'include',windowAudio:'window',selfBrowserSurface:'exclude'})}
+ catch(e){status(e.name==='NotAllowedError'?'Окно не выбрано — нажми «Слушать игру» ещё раз':'Не получилось: '+e.message);return}
+ if(!st.getAudioTracks().length){st.getTracks().forEach(t=>t.stop());status('Звук не передан: при выборе окна включи переключатель звука (или «Весь экран» + системный звук)');return}
+ const vt=st.getVideoTracks()[0],kind=vt&&vt.getSettings?vt.getSettings().displaySurface:'';
+ attach(st,kind==='window'?'окно игры':kind==='monitor'?'весь экран — Discord и музыка могут мешать, лучше выбрать окно игры':'звук и экран игры');
+ if(set.autoPip&&!PIP&&!(await openPip(true)))askPip()}
+// браузер разрешает открыть окно только по нажатию; если время нажатия истекло — откроем по следующему клику на странице
+function askPip(){const b=$('bPip');b.classList.add('pulse');status($('status').textContent+' · нажми в любом месте страницы, чтобы открыть окно поверх игры',true);
+ document.addEventListener('click',e=>{b.classList.remove('pulse');if(S.ctx)status($('status').textContent.split(' · нажми')[0],true);if(!PIP&&S.ctx&&set.autoPip&&!e.target.closest('#bPip,#bStop,#cAutoPip'))openPip()},{once:true,capture:true})}
+/* ===== Карта и режим ===== */
+let afterMap=null;
+function renderMaps(){$('mapLbl').textContent=mapName(set.map,set.mode);
+ $('maps').innerHTML=MAPS.map(([id,n,ms])=>`<div class="mapc${set.map===id?' act':''}"><b>${n}</b><div class="chips">${[...ms].map(k=>`<button data-m="${id}" data-k="${k}" class="${set.map===id&&set.mode===k?'act':''}">${MODES[k]}</button>`).join('')}</div></div>`).join('')}
+function askMap(next){afterMap=next||null;renderMaps();$('dlgSkip').textContent=next?'Продолжить без карты':'Не указывать карту';$('dlgMap').showModal()}
+function setMap(m,k){const n=afterMap;afterMap=null;const ch=set.map!==m||set.mode!==k;set.map=m;set.mode=k;saveSet();renderMaps();$('dlgMap').close();if(ch&&S.ctx)clearDone();else if(lastNow)showNow(lastNow);renderPip(lastNow);if(n)n()}
+$('maps').addEventListener('click',e=>{const b=e.target.closest('button');if(b)setMap(b.dataset.m,b.dataset.k)});
+$('dlgSkip').onclick=()=>setMap('','');
+$('dlgX').onclick=()=>$('dlgMap').close();$('dlgMap').addEventListener('close',()=>{afterMap=null});
+$('bMap').onclick=()=>askMap(null);
+$('bDisp').onclick=()=>askMap(startCapture);
+/* ===== Мои находки ===== */
+// нажали «выпал» у предмета: одна отметка на ящик; повторное нажатие снимает, другой предмет — заменяет
+function markFound(it,name){const V=view(it);if(!V)return;const x=V.G.items.find(y=>y.n===name);if(!x)return;
+ JOURNAL=JOURNAL.filter(j=>j.id!==it.id);if(it.found===name)it.found=null;
+ else{it.found=name;JOURNAL.unshift({id:it.id,t:Date.now(),map:set.map,mode:set.mode,g:V.G.g,s:x.ns,n:x.n,tier:x.t,p:x.p})}
+ if(JOURNAL.length>5000)JOURNAL.length=5000;saveJ();renderJ();showNow(it)}
+const money=n=>n>=1e6?(n/1e6).toFixed(1).replace('.',',')+' млн ₭':n>=1e3?Math.round(n/1e3)+' тыс. ₭':n+' ₭';
+function renderJ(){const jm=$('jMap').value,jt=$('jTier').value,all=JOURNAL.filter(j=>!jm||j.map===jm),red=all.filter(j=>j.tier==='M'),day=Date.now()-864e5;
+ $('jStats').innerHTML=[['','Отмечено ящиков',all.length],['r','Красных',red.length+(all.length?' · '+Math.round(red.length/all.length*100)+'%':'')],['','Красных на сумму',money(red.reduce((s,j)=>s+(+j.p||0),0))],['','Красных за 24 часа',red.filter(j=>j.t>day).length]].map(([c,k,v])=>`<div class="${c}"><span class="k">${k}</span><b>${v}</b></div>`).join('');
+ const L=all.filter(j=>!jt||j.tier===jt);
+ $('jList').innerHTML=L.slice(0,200).map(j=>`<li><span class="dot t-${TIER[j.tier]?j.tier:'C'}"></span><div><div>${esc(j.n)}</div><div class="meta">${new Date(+j.t).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})} · ${mapName(j.map,j.mode)} · №${+j.g} · ${esc(j.s||'')}</div></div><span class="num">${j.p?fmt(+j.p):'—'}</span><button class="sm" data-j="${esc(j.id)}" aria-label="Убрать из журнала">✕</button></li>`).join('')||'<li><span></span><span class="meta">Пока пусто. После проверки ящика нажми «выпал» у предмета, который в нём оказался.</span></li>'}
+$('jMap').innerHTML+=MAPS.map(m=>`<option value="${m[0]}">${m[1]}</option>`).join('');$('jMap').onchange=$('jTier').onchange=renderJ;
+$('jList').addEventListener('click',e=>{const b=e.target.closest('button[data-j]');if(!b)return;JOURNAL=JOURNAL.filter(j=>j.id!==b.dataset.j);const it=RECENT.find(x=>x.id===b.dataset.j);if(it)it.found=null;saveJ();renderJ();if(lastNow)showNow(lastNow)});
+$('bJExp').onclick=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify({app:'abi-uho-journal',v:1,journal:JOURNAL,items:OWN})],{type:'application/json'}));a.download='abi-uho-nahodki.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),5000)};
+$('fJ').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;try{const d=JSON.parse(await f.text());if(!d||d.app!=='abi-uho-journal')throw new Error('это не файл находок');
+ let n=0,k=0;const ids=new Set(JOURNAL.map(j=>j.id));
+ for(const j of d.journal||[])if(j&&j.g>=1&&j.g<=38&&typeof j.n==='string'&&TIER[j.tier]&&!ids.has(String(j.id))){JOURNAL.push({id:String(j.id).slice(0,40),t:+j.t||Date.now(),map:String(j.map||''),mode:String(j.mode||''),g:+j.g,s:String(j.s||'').slice(0,5),n:j.n.slice(0,80),tier:j.tier,p:+j.p||0});n++}
+ for(const x of d.items||[])if(okItem(x)&&!OWN.some(y=>y.g===x.g&&y.n===x.n)){OWN.push({g:+x.g,n:x.n.slice(0,80),s:x.s,t:x.t,p:+x.p||0});k++}
+ JOURNAL.sort((a,b)=>b.t-a.t);saveJ();saveOwn();status('Добавлено находок: '+n+', предметов: '+k,true)}catch(err){status('Не удалось прочитать файл: '+err.message)}};
+/* ===== Свои предметы ===== */
+function saveOwn(){try{localStorage.setItem('abiuho-items',JSON.stringify(OWN))}catch(e){}applyOwn();renderOwn();renderCat();renderJ();refreshTitles();if(lastNow)showNow(lastNow)}
+function renderOwn(){$('ownList').innerHTML=OWN.map((x,i)=>`<button class="sm" data-o="${i}" title="Убрать предмет">№${x.g} · ${esc(x.n)} · ${esc(x.s.replace('x','×'))} ✕</button>`).join('')}
+$('oS').innerHTML=['1x1','1x2','1x3','1x4','2x2','2x3','2x4','3x3','3x4'].map(s=>`<option value="${s}">${s.replace('x','×')}</option>`).join('');
+$('oG').innerHTML=groupOpts(1);
+$('ownForm').onsubmit=e=>{e.preventDefault();const x={g:+$('oG').value,n:$('oN').value.trim(),s:$('oS').value,t:$('oT').value,p:Math.max(0,+$('oP').value||0)};
+ if(!okItem(x))return;if(GROUPS[x.g-1].items.some(y=>y.n===x.n)){status('Такой предмет в этой группе уже есть');return}OWN.push(x);$('oN').value='';$('oP').value='';saveOwn();status('Предмет добавлен: '+x.n,true)};
+$('ownList').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;OWN.splice(+b.dataset.o,1);saveOwn()});
+// «Нет в списке»: открыть форму с уже выбранными группой и размером
+$('bMiss').onclick=()=>{const V=lastNow&&view(lastNow);$('ownBox').open=true;if(V){$('oG').value=V.G.g;if(V.key)$('oS').value=V.key.replace('×','x')}$('ownBox').scrollIntoView({block:'center'});$('oN').focus()};
 async function fillDevices(){try{const ds=(await navigator.mediaDevices.enumerateDevices()).filter(d=>d.kind==='audioinput');const cur=$('dev').value;
  $('dev').innerHTML='<option value="">Вход: стерео микшер / VB-Cable…</option>'+ds.map(d=>`<option value="${esc(d.deviceId)}">${esc(d.label||'Устройство '+d.deviceId.slice(0,6))}</option>`).join('');$('dev').value=cur}catch(e){}}
 $('bDev').onclick=async()=>{try{if(!$('dev').value){const t=await navigator.mediaDevices.getUserMedia({audio:true});t.getTracks().forEach(x=>x.stop());await fillDevices();status('Выбери вход в списке и нажми ещё раз');return}
@@ -780,33 +957,51 @@ $('bDev').onclick=async()=>{try{if(!$('dev').value){const t=await navigator.medi
 $('bStop').onclick=stop;
 /* ===== Окно поверх игры (Document Picture-in-Picture, Chrome 116+) ===== */
 let PIP=null;
-const PIP_CSS=`body{margin:0;background:#151813;color:#e9ebe1;font:15px/1.35 Rubik,system-ui,sans-serif}#p{padding:12px 14px;min-height:100vh;box-sizing:border-box}
-#p.red{background:#4a1212}.l{font-size:16px;font-weight:700}.big{font-size:30px;font-weight:700;margin:4px 0}#p.red .big{color:#ff8a8a}
-.s{color:#9aa08c;font-size:13px}ul{list-style:none;margin:8px 0 0;padding:0;font-size:13px}li{display:flex;justify-content:space-between;gap:8px;padding:2px 0;border-top:1px solid #2e3428}
-li.M{color:#ff9a9a}.n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.z{color:#9aa08c;white-space:nowrap}`;
-async function openPip(){if(!('documentPictureInPicture' in window)){status('Окно поверх игры есть только в Chrome 116 и новее');return}
- try{if(PIP){PIP.focus();return}const w=await documentPictureInPicture.requestWindow({width:340,height:250});const st=w.document.createElement('style');st.textContent=PIP_CSS;w.document.head.append(st);
-  w.document.title='Ухо торговца';w.document.body.innerHTML='<div id="p"><div class="l">Жду звук…</div><div class="s">Дёрни ящик у торговца</div></div>';PIP=w;w.addEventListener('pagehide',()=>{PIP=null});if(lastNow)renderPip(lastNow)}catch(e){status('Не удалось открыть окно: '+e.message)}}
-function renderPip(it){if(!PIP)return;const el=PIP.document.getElementById('p');if(!el)return;const top=it.matches[0];
- if(!top||top.s<MAYBE||!CAT.length){el.className='';el.innerHTML='<div class="l">Не узнал</div><div class="s">'+(top?'ближе всего №'+top.g+', '+pct(top.s)+'%':'')+'</div>';return}
- const V=view(it),p=V.list.length?V.red/V.list.length:0,sure=top.s>=set.minSim/100;el.className=V.red&&sure&&p*100>=set.redPct&&(it.merged||!it.kind)?'red':'';
- el.innerHTML=`<div class="l">${sure?'':'Похоже: '}№${V.G.g} ${esc(V.G.d)}${V.key?' · '+V.key:''}</div><div class="big">${!V.list.length?(V.st==='nosuch'?'Такого нет':'Размер?'):V.red?'Красное '+Math.round(p*100)+'%':'Красного нет'}</div>
- <div class="s">${V.list.length?compo(V.list):esc(stText(V))}</div><div class="s">${stage(it)?stage(it)+' · ':''}совпадение ${pct(top.s)}%</div>
- <ul>${[...V.list].sort((a,b)=>b.p-a.p).slice(0,5).map(x=>`<li class="${x.t}"><span class="n">${esc(x.n)}</span><span class="z">${x.s}</span></li>`).join('')}</ul>`}
-$('bPip').onclick=openPip;
+const VC={yes:'#e23b3b',may:'#e08a1e',mayno:'#3f86e0',no:'#3fa65a',q:'#6b7162'};
+const PIP_CSS=`*{box-sizing:border-box}body{margin:0;background:#151813;color:#e9ebe1;font:14px/1.35 Rubik,system-ui,sans-serif;height:100vh;display:flex;flex-direction:column}
+#p{--c:#6b7162;padding:8px 12px;flex:none;border-left:8px solid var(--c);background:color-mix(in srgb,var(--c) 22%,#151813)}
+${Object.entries(VC).map(([k,v])=>'.'+k+'{--c:'+v+'!important}').join('')}
+.m{display:flex;justify-content:space-between;gap:8px;color:#b5baa8;font-size:12px}.m .on{color:#9fe07a}
+.big{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:clamp(20px,8vw,34px);line-height:1.1;font-weight:700;margin:4px 0 2px}.big b{color:#fff}
+.s{color:#b5baa8;font-size:13px}
+#l{list-style:none;margin:0;padding:0;flex:1;min-height:0;overflow:auto}
+#l li{display:grid;grid-template-columns:26px 40px minmax(0,1fr) auto;gap:8px;align-items:center;padding:4px 12px 4px 4px;border-left:8px solid var(--c);border-bottom:1px solid #2e3428}
+#l .no_{color:#9aa08c;text-align:right}#l canvas{width:40px;height:30px;object-fit:contain;background:#0e100c;border-radius:3px}
+#l .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#l .t small{color:#9aa08c}#l b{white-space:nowrap}
+#f{display:flex;gap:6px;padding:6px 8px;flex:none;border-top:1px solid #2e3428}#f button{flex:1;font:inherit;font-size:12px;color:#e9ebe1;background:#262b22;border:1px solid #3a4133;border-radius:6px;padding:5px 6px;cursor:pointer}#f button.hot{background:#c7bd7d;color:#151813}#f button[hidden]{display:none}`;
+// quiet — открываем сами после выбора окна; false, если браузер не разрешил без нажатия
+async function openPip(quiet){if(!('documentPictureInPicture' in window)){if(quiet!==true)status('Окно поверх игры есть только в Chrome 116 и новее');return quiet===true}
+ try{if(PIP){PIP.focus();return true}const w=await documentPictureInPicture.requestWindow({width:340,height:400});const d=w.document,st=d.createElement('style');st.textContent=PIP_CSS;d.head.append(st);
+  d.title='Ухо торговца';d.body.innerHTML='<div id="p"></div><ul id="l"></ul><div id="f"><button data-a="learn">Запомнить окно торговца</button><button data-a="not">Это не торговец</button><button data-a="clear">Очистить</button></div>';
+  d.getElementById('f').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;const a=b.dataset.a;if(a==='clear')clearDone();else trLearn(a==='not')});
+  PIP=w;w.addEventListener('pagehide',()=>{PIP=null});renderPip(lastNow);return true}catch(e){if(quiet!==true)status('Не удалось открыть окно: '+e.message);return false}}
+function renderPip(it){if(!PIP)return;const D=PIP.document,el=D.getElementById('p');if(!el)return;
+ const live=TR.on&&S.ctx,btn=a=>D.querySelector('#f [data-a='+a+']');btn('learn').hidden=!S.ctx||live;btn('learn').className=S.ctx&&!TR.pos.length?'hot':'';btn('not').hidden=!live;
+ let c='q',big='Жду ящик',pc='',note='наведи, дождись цены и потяни';
+ if(!CAT.length){big='Нет звуков';note='загрузи файл со звуками на странице'}
+ else if(!S.ctx){big='Не слушаю';note='нажми «Слушать игру» на странице'}
+ else if(!TR.pos.length&&!it){big='Открой торговца';note='и нажми «Запомнить окно торговца» — один раз'}
+ else if(TR.pos.length&&VIS.on&&!TR.on){big='Не у торговца';note='открой окно торговца — начну слушать'}
+ else if(it){if(it.kind&&!it.merged){if(it.kind==='взять'){big='Слышу…';note='отпусти ящик — покажу итог'}else{big='Потяни мышкой';note='перенос кнопкой F не считается'}}
+  else{const d=verdict(it);c=d.c;big=d.big;pc=d.pc;note=[it.no?'ящик '+it.no:'',d.V&&d.V.key,d.note].filter(Boolean).join(' · ')}}
+ el.className=c;el.innerHTML=`<div class="m"><span class="${live?'on':''}">● ${trText()}</span><span>${set.map?mapName(set.map,set.mode):'карта не указана'}</span></div><div class="big"><span>${esc(big)}</span><b>${pc}</b></div><div class="s">${esc(note)}</div>`;
+ const L=D.getElementById('l');L.innerHTML=DONE.map(x=>{const d=verdict(x);return`<li class="${d.c}"><span class="no_">${x.no}</span><canvas></canvas><span class="t">${d.big}${d.V&&d.V.key?' <small>'+d.V.key+'</small>':''}</span><b>${d.pc}</b></li>`}).join('');
+ [...L.children].forEach((li,i)=>{const s=DONE[i].size&&DONE[i].size.shot,cv=li.querySelector('canvas');if(s){cv.width=s.width;cv.height=s.height;try{cv.getContext('2d').drawImage(s,0,0)}catch(e){}}})}
+$('bPip').onclick=()=>openPip();
+$('bLearn').onclick=()=>trLearn(false);$('bNotTr').onclick=()=>trLearn(true);$('bForget').onclick=()=>{TR.pos=[];TR.neg=[];trSave();status('Окно торговца забыто')};
 // кадры звука одной картинкой: «до» и два кадра «после» (с рамкой найденного ящика) — для настройки определителя
 function dbgBlob(before,after,res){return new Promise(ok=>{try{const fr=[before,...after].filter(Boolean);if(!fr.length)return ok(null);
  const W=fr[0].width,H=fr[0].height,c=document.createElement('canvas');c.width=W;c.height=H*fr.length;const x=c.getContext('2d');
  fr.forEach((f,i)=>{x.putImageData(f,0,i*H);x.fillStyle='#000a';x.fillRect(0,i*H,420,44);x.fillStyle='#ffd84a';x.font='bold 28px sans-serif';x.fillText(i===0&&before?'ДО ЗВУКА':'ПОКА ДЕРЖИШЬ, кадр '+(i-(before?1:0)+1),12,i*H+32)});
  if(res){x.strokeStyle='#ffd84a';x.lineWidth=3;const[bx,by,bw,bh]=res.box;for(let i=before?1:0;i<fr.length;i++)x.strokeRect(bx,by+i*H,bw,bh)}
  c.toBlob(b=>ok(b),'image/jpeg',0.92)}catch(e){ok(null)}})}
-async function saveFrames(it){if(!it||!it.dbg){status(it&&set.vis&&(VIS.latest||VIS.video)?'Кадры ещё готовятся — нажми через секунду':'У этого звука нет кадров: нужно «Слушать игру» → «Весь экран» со звуком');return}
+async function saveFrames(it){if(!it||!it.dbg){status(it&&set.vis&&VIS.on?'Кадры ещё готовятся — нажми через секунду':'У этого звука нет кадров: нужно «Слушать игру» и окно игры со звуком');return}
  const b=await it.dbg;if(!b){status('Кадры не сохранились');return}const a=document.createElement('a');a.href=URL.createObjectURL(b);
  a.download='abi-uho-kadry-'+new Date(it.t).toLocaleTimeString('ru-RU').replace(/:/g,'-')+'.jpg';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),5000);status('Кадры сохранены в загрузки',true)}
 $('bDbg').onclick=()=>saveFrames(lastNow);
 
 
-window.ABI_TEST={attach,stop,get set(){return set},get vis(){return VIS},get PACK(){return PACK},get CAT(){return CAT},get RECENT(){return RECENT},Detector,features,match,unb64};
+window.ABI_TEST={attach,stop,get set(){return set},get vis(){return VIS},get PACK(){return PACK},get CAT(){return CAT},get RECENT(){return RECENT},Detector,features,match,unb64,view,verdict,showNow,markFound,addRecent,finish,listChance,openPip,get PIP(){return PIP},TR,trLearn,inTrader,DONE,clearDone,onLive,visWorker,get JOURNAL(){return JOURNAL},get OWN(){return OWN},GROUPS};
 $('fAudio').onchange=async e=>{const files=[...e.target.files];e.target.value='';const dc=S.pctx||(S.pctx=new AudioContext());let n=0;
  for(const f of files){try{status('Режу: '+f.name);const buf=await dc.decodeAudioData(await f.arrayBuffer());const L=buf.length,a=buf.getChannelData(0),b=buf.numberOfChannels>1?buf.getChannelData(1):a;
   const det=new Detector(buf.sampleRate,()=>set,(seg,sr)=>{if(addRecent(seg,sr,f.name))n++});
@@ -817,8 +1012,8 @@ $('fAudio').onchange=async e=>{const files=[...e.target.files];e.target.value=''
 /* ===== Настройки и шкала ===== */
 const bind=(id,key,out,f=v=>v)=>{const el=$(id);el.value=set[key];const upd=()=>{set[key]=+el.value;$(out).textContent=f(set[key]);saveSet()};el.oninput=upd;upd()};
 bind('sSens','sens','vSens');bind('sMin','minDb','vMin');bind('sCap','capMs','vCap');
-bind('sSim','minSim','vSim');bind('sRed','redPct','vRed');$('sSim').addEventListener('change',()=>{refreshTitles();lastNow&&showNow(lastNow)});
-const chk=(id,key)=>{const el=$(id);el.checked=set[key];el.onchange=()=>{set[key]=el.checked;saveSet()}};chk('cBeep','beep');chk('cVoice','voice');chk('cVis','vis');chk('cRec','rec');chk('cAdv','adv');
+bind('sSim','minSim','vSim');$('sSim').addEventListener('change',()=>{refreshTitles();lastNow&&showNow(lastNow)});
+const chk=(id,key)=>{const el=$(id);el.checked=set[key];el.onchange=()=>{set[key]=el.checked;saveSet()}};chk('cVis','vis');chk('cAutoPip','autoPip');chk('cRec','rec');chk('cAdv','adv');
 $('recG').innerHTML=groupOpts(set.recG);$('recG').onchange=()=>{set.recG=+$('recG').value;saveSet()};
 const pos=db=>Math.max(0,Math.min(100,(db+90)/90*100));
 (function tick(){const d=S.det;if(d){$('mFill').style.width=pos(d.level)+'%';$('mBg').style.left=pos(d.bg)+'%';const thr=Math.max(d.bg+set.sens,set.minDb);$('mThr').style.left=pos(thr)+'%';
@@ -844,7 +1039,7 @@ async function loadBuiltins(sr){$('packBanner').hidden=!!PACK;if(!PACK){renderCa
    fresh.push({id:'b-'+name+(k?'#'+k:''),g,sr,seg,builtin:true,alt:k>0,kind,feat:features(seg,sr)})})}catch(e){}}
  CAT=fresh.concat(CAT.filter(e=>!e.builtin));renderCat();refreshTitles()}
 /* ===== Старт ===== */
-(async()=>{await openDB();try{const pk=await packGet();if(pk&&Array.isArray(pk.sounds))PACK=pk.sounds}catch(e){}await loadBuiltins(48000);const rows=await dbAll();for(const r of rows){try{addRef(r.g,toF32(new Int16Array(r.pcm)),r.sr,r.id,r.created)}catch(e){}}renderCat();fillDevices()})();
+(async()=>{await openDB();try{const pk=await packGet();if(pk&&Array.isArray(pk.sounds))PACK=pk.sounds}catch(e){}await loadBuiltins(48000);const rows=await dbAll();for(const r of rows){try{addRef(r.g,toF32(new Int16Array(r.pcm)),r.sr,r.id,r.created,r.kind)}catch(e){}}renderCat();renderMaps();renderTr();renderJ();renderOwn();fillDevices()})();
 }
 </script>
 <script>if('serviceWorker' in navigator&&location.protocol==='https:'){try{navigator.serviceWorker.register('sw.js')}catch(e){}}</script>
