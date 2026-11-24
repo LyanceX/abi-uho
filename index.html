@@ -165,7 +165,7 @@ code{font-family:"JetBrains Mono",monospace;font-size:13px;background:#0e100c;pa
       <li>Отключи «улучшайзеры» звука: Sonar, Nahimic, Dolby Atmos, Windows Sonic, эквалайзеры — они меняют звук и ломают сравнение.</li>
       <li>Один раз загрузи файл со звуками <code>abi-uho-zvuki.json</code> (кнопка «Импорт» в каталоге или жёлтая плашка сверху). Записывать самому ничего не нужно. Если какой-то ящик узнаётся плохо, добавь свою запись: в ленте «Пойманные звуки» выбери правильную группу и нажми «В эталон».</li>
       <li>Нажми «Окно поверх игры» — маленькое окно останется поверх игры, сворачивать игру не нужно (игра должна быть в режиме «Окно без рамки», не «Полный экран»). Можно и без окна: сайт пищит сам.</li>
-      <li>В рейде у торговца хватай ящик, отводи в сторону и отпускай — он вернётся на место. Сайт слышит «взял» и «положил» (оба звука объединяются для точности), определяет размер ящика по экрану и после «положил» говорит итоговый шанс красного по обоим звукам: «75 процентов». На одиночный звук и при 0% молчит. Тяни ящики по одному, без двойных кликов. На экране «Последний звук» — группа, предметы и есть ли среди них красные. Кнопки размера приглушают предметы другого размера.</li>
+      <li>В рейде у торговца хватай ящик, отводи в сторону и отпускай — он вернётся на место. Сайт слышит «взял» и «положил» (оба звука объединяются для точности), определяет размер ящика по экрану и после «положил» говорит итоговый шанс красного по обоим звукам: «75 процентов» (если «положил» не поймался — через секунду говорит по «взял»). На одиночный «положил» (перенос кнопкой F) и при 0% молчит. Тяни ящики по одному, без двойных кликов. На экране «Последний звук» — группа, предметы и есть ли среди них красные. Кнопки размера приглушают предметы другого размера.</li>
       <li>Режим «Запись эталонов» нужен, только если после патча звуки поменяются: выбери группу, дёрни такой ящик — запись сохранится.</li>
       <li>Свои записи хранятся в этом браузере. «Экспорт эталонов» → кинь файл друзьям, они делают «Импорт».</li>
     </ol>
@@ -249,49 +249,48 @@ const CargoVision=(()=>{
   return{vm,hm,rw,rh}}
  function bestPhase(p,P,r){let best=null;for(let f=0;f<P;f+=0.5){const s=gridScore(p,f,P,r);if(!best||s>best.s)best={f,s}}return best}
  // кадр «до» (G0) и «после» (G1) в оттенках серого, t0/t1 — карты оттенков; hint — ожидаемый шаг сетки
+ // Точные позиции линий: ищем пик профиля возле каждой ожидаемой линии, уточняем шаг прямой по найденным пикам
+ function fitAxis(p,f,P,count){const r=Math.max(3,Math.round(P*0.08)),pk=[];
+  for(let k=0;k<=count;k++){const e=Math.round(f+k*P);let bi=-1,bv=0;for(let x=e-r;x<=e+r;x++)if(x>=0&&x<p.length&&p[x]>bv){bv=p[x];bi=x}pk.push({k,e,bi,bv})}
+  const vs=pk.map(q=>q.bv).filter(v=>v>0).sort((a,b)=>a-b),med=vs.length?vs[vs.length>>1]:0;const good=pk.filter(q=>q.bi>=0&&q.bv>=med*0.4&&q.bv>0);
+  let a=f,b=P;if(good.length>=3){const n=good.length,mk=good.reduce((s,q)=>s+q.k,0)/n,mx=good.reduce((s,q)=>s+q.bi,0)/n;let nu=0,de=0;for(const q of good){nu+=(q.k-mk)*(q.bi-mx);de+=(q.k-mk)**2}const sl=nu/de;if(Math.abs(sl-P)<P*0.06){b=sl;a=mx-sl*mk}}
+  return Array.from({length:count+1},(_,k)=>{const e=Math.round(a+k*b);let bi=e,bv=0;for(let x=e-2;x<=e+2;x++)if(x>=0&&x<p.length&&p[x]>bv){bv=p[x];bi=x}return bv>=med*0.3&&bv>0?bi:e})}
+ // Сетка торговца — в правой части экрана (на 2560×1440: x 1673–2440, y 253–1180). Ищем только там.
+ const AREA={x0:0.56,x1:0.99,y0:0.12,y1:0.9};
  function analyzeGrid(G0,G1,t0,t1,hint){
   const{w,h}=G1;if(!G0||G0.w!==w||G0.h!==h)return null;const P0=hint||h*CELL_K;
-  // 1) карта изменений: разница яркости + рост цветного оттенка (по прореженной сетке)
-  const W=Math.floor(w/ST),H=Math.floor(h/ST),D=new Uint8Array(W*H);
+  const W=Math.floor(w/ST),H=Math.floor(h/ST),D=new Uint8Array(W*H);let big=0;
   for(let y=0;y<H;y++)for(let x=0;x<W;x++){const i=y*ST*w+x*ST,j=y*W+x;let v=Math.abs(G1.g[i]-G0.g[i]);
-   if(t0&&t1)for(let k=0;k<2;k++){const dt=t1.t[k][j]-t0.t[k][j];if(dt>0)v+=dt}D[j]=Math.min(255,v)}
-  // блок с самым сильным изменением (блоки по полклетки)
-  const B=Math.max(4,Math.round(P0/2/ST)),blocks=[];
-  for(let by=0;by+B<=H;by+=B)for(let bx=0;bx+B<=W;bx+=B){let s=0;for(let y=by;y<by+B;y++)for(let x=bx;x<bx+B;x++)s+=D[y*W+x];s/=B*B;if(s>=5)blocks.push({s,x:bx*ST,y:by*ST})}
-  blocks.sort((a,b)=>b.s-a.s);
-  // несколько самых изменившихся мест (на экране может двигаться и что-то кроме ящика — например, сам торговец)
-  const tops=[];for(const bl of blocks){if(tops.every(t=>Math.abs(t.x-bl.x)>P0*2.5||Math.abs(t.y-bl.y)>P0*2.5))tops.push(bl);if(tops.length>=4)break}
-  let res=null;for(const top of tops){const r=gridAt(G0,D,W,top,P0);if(r&&(!res||r.v>res.v))res=r}
-  if(!res)return null;delete res.v;return res}
- function gridAt(G0,D,W,top,P0){const{w,h}=G0;
-  // 2) окрестность и шаг/сдвиг сетки в ней (по кадру «до»)
-  const pad=Math.round(P0*4),rx=Math.max(0,top.x-pad),ry=Math.max(0,top.y-pad),rw=Math.min(w,top.x+pad)-rx,rh=Math.min(h,top.y+pad)-ry;
-  if(rw<P0*2||rh<P0*2)return null;
-  const L=lineMapsG(G0,rx,ry,rw,rh),r=2;let grid=null;
-  for(let P=P0*0.9;P<=P0*1.1;P+=0.25){const pr=runProfiles(L,Math.round(P*0.55));const a=bestPhase(pr.V,P,r),c=bestPhase(pr.H,P,r);const s=a.s+c.s;if(!grid||s>grid.s)grid={P,fx:a.f,fy:c.f,s}}
+   if(t0&&t1)for(let k=0;k<2;k++){const dt=t1.t[k][j]-t0.t[k][j];if(dt>0)v+=dt}D[j]=Math.min(255,v);if(v>30)big++}
+  // сменился почти весь экран (Alt+Tab, меню, загрузка) — не гадаем
+  if(big>W*H*0.35)return null;
+  const rx=Math.round(w*AREA.x0),ry=Math.round(h*AREA.y0),rw=Math.round(w*AREA.x1)-rx,rh=Math.round(h*AREA.y1)-ry;
+  const L=lineMapsG(G0,rx,ry,rw,rh),pr=runProfiles(L,Math.round(P0*0.55)),r=2;let grid=null;
+  for(let P=P0*0.9;P<=P0*1.1;P+=0.25){const a=bestPhase(pr.V,P,r),c=bestPhase(pr.H,P,r);const s=a.s+c.s;if(!grid||s>grid.s)grid={P,fx:a.f,fy:c.f,s}}
   if(!grid||grid.s<=0.06)return null;
-  const P=grid.P,cols=Math.floor((rw-grid.fx)/P),rows=Math.floor((rh-grid.fy)/P);if(cols<1||rows<1)return null;
-  const X=c=>Math.round(grid.fx+c*P),Y=k=>Math.round(grid.fy+k*P);
-  // 3) есть ли линия на общей стороне двух соседних клеток
+  let P=grid.P;const cols=Math.floor((rw-grid.fx)/P),rows=Math.floor((rh-grid.fy)/P);if(cols<1||rows<1)return null;
+  const xs=fitAxis(pr.V,grid.fx,P,cols),ys=fitAxis(pr.H,grid.fy,P,rows);P=(xs[cols]-xs[0])/cols;
+  const X=c=>xs[c],Y=k=>ys[k];
   const inset=Math.round(P*0.15);
-  const vBorder=(c,k)=>{let hit=0,n=0;const x=X(c);for(let y=Y(k)+inset;y<Y(k+1)-inset;y++){n++;let f=0;for(let d=-2;d<=2&&!f;d++){const xx=x+d;if(xx>=0&&xx<rw&&L.vm[y*rw+xx])f=1}hit+=f}return n&&hit/n>0.45};
-  const hBorder=(c,k)=>{let hit=0,n=0;const y=Y(k);for(let x=X(c)+inset;x<X(c+1)-inset;x++){n++;let f=0;for(let d=-2;d<=2&&!f;d++){const yy=y+d;if(yy>=0&&yy<rh&&L.hm[yy*rw+x])f=1}hit+=f}return n&&hit/n>0.45};
+  const vBorder=(c,k)=>{let hit=0,n=0;const x=X(c);for(let y=Y(k)+inset;y<Y(k+1)-inset;y++){n++;let f=0;for(let d=-3;d<=3&&!f;d++){const xx=x+d;if(xx>=0&&xx<rw&&L.vm[y*rw+xx])f=1}hit+=f}return n&&hit/n>0.45};
+  const hBorder=(c,k)=>{let hit=0,n=0;const y=Y(k);for(let x=X(c)+inset;x<X(c+1)-inset;x++){n++;let f=0;for(let d=-3;d<=3&&!f;d++){const yy=y+d;if(yy>=0&&yy<rh&&L.hm[yy*rw+x])f=1}hit+=f}return n&&hit/n>0.45};
   const par=Array.from({length:cols*rows},(_,i)=>i),find=i=>par[i]===i?i:(par[i]=find(par[i]));
   for(let k=0;k<rows;k++)for(let c=0;c<cols;c++){if(c+1<cols&&!vBorder(c+1,k))par[find(k*cols+c)]=find(k*cols+c+1);if(k+1<rows&&!hBorder(c,k+1))par[find(k*cols+c)]=find((k+1)*cols+c)}
   const comps=new Map();for(let i=0;i<cols*rows;i++){const p=find(i);if(!comps.has(p))comps.set(p,[]);comps.get(p).push(i)}
-  // 4) ящик, который изменился сильнее всего (средняя разница внутри него)
+  // сменилась большая часть сетки торговца — это не перетаскивание одного ящика
+  {let n=0,ch=0;for(let y=Math.ceil((ry+Y(0))/ST);y<Math.floor((ry+Y(rows))/ST);y++)for(let x=Math.ceil((rx+X(0))/ST);x<Math.floor((rx+X(cols))/ST);x++){n++;if(D[y*W+x]>15)ch++}if(n&&ch>n*0.25)return null}
+  // ящик, который изменился сильнее всего (средняя разница внутри него)
   const sc=[];
   for(const cells of comps.values()){const cs=cells.map(i=>i%cols),ks=cells.map(i=>(i-i%cols)/cols);const c0=Math.min(...cs),k0=Math.min(...ks),cw=Math.max(...cs)-c0+1,ch=Math.max(...ks)-k0+1;
-   if(cells.length!==cw*ch||cw>4||ch>4||cw*ch>9)continue;      // ящики у торговца не больше 3×3
-   if(c0===0||k0===0||c0+cw>=cols||k0+ch>=rows)continue;         // касается края окрестности — не целиком виден
+   if(cells.length!==cw*ch||cw>4||ch>4||cw*ch>9)continue;
    let closed=true;for(let q=0;q<cw&&closed;q++)closed=hBorder(c0+q,k0)&&hBorder(c0+q,k0+ch);for(let q=0;q<ch&&closed;q++)closed=vBorder(c0,k0+q)&&vBorder(c0+cw,k0+q);
-   if(!closed)continue;                                          // со всех сторон должна быть рамка
+   if(!closed)continue;
    const x0=rx+X(c0),y0=ry+Y(k0),x1=rx+X(c0+cw),y1=ry+Y(k0+ch),m=Math.round(P*0.08);let n=0,s=0;
    for(let y=Math.ceil((y0+m)/ST);y<Math.floor((y1-m)/ST);y++)for(let x=Math.ceil((x0+m)/ST);x<Math.floor((x1-m)/ST);x++){n++;s+=D[y*W+x]}
    if(n)sc.push({v:s/n,cw,ch,box:[x0,y0,x1-x0,y1-y0]})}
   sc.sort((a,b)=>b.v-a.v);const best=sc[0];if(!best||best.v<4)return null;
-  const second=sc[1]?sc[1].v:0;
-  return{v:best.v,w:best.cw,h:best.ch,P,box:best.box,roi:[rx,ry,rw,rh],agree:true,conf:Math.min(1,(best.v-second)/best.v),how:'grid'}}
+  const second=sc[1]?sc[1].v:0;if(second>best.v*0.8)return null;   // два ящика изменились одинаково — непонятно, какой тянули
+  return{w:best.cw,h:best.ch,P,box:best.box,roi:[rx,ry,rw,rh],agree:true,conf:Math.min(1,(best.v-second)/best.v),how:'grid'}}
  return{tints,gray,analyze,analyzeGrid}})();
 </script>
 <script>
@@ -380,19 +379,24 @@ function sim(A,B){if(!A.T||!B.T)return 0;const minT=Math.min(A.T,B.T);let best=-
  return (1-W_MEAN)*best+W_MEAN*vpear(A.mean,B.mean)}
 // Детектор: ловит всплеск над фоном (по сигналу без низкого гула) и вырезает кусок с запасом PRE_MS до начала
 class Detector{
- constructor(sr,getSet,onSeg){this.sr=sr;this.ring=new Float32Array(Math.ceil(sr*4));this.total=0;this.bg=-80;this.last=-1e12;this.pend=null;this.onSeg=onSeg;this.getSet=getSet;this.level=-100;this.mute=0;this.hpA=Math.exp(-2*Math.PI*HP_HZ/sr);this.hs=[0,0,0,0];this.hist=[]}
+ constructor(sr,getSet,onSeg){this.sr=sr;this.ring=new Float32Array(Math.ceil(sr*4));this.total=0;this.bg=-80;this.last=-1e12;this.pends=[];this.onSeg=onSeg;this.getSet=getSet;this.level=-100;this.mute=0;this.hpA=Math.exp(-2*Math.PI*HP_HZ/sr);this.hs=[0,0,0,0];this.hist=[];this.armed=true;this.recent=[]}
  feed(x){const R=this.ring,L=R.length,set=this.getSet(),a=this.hpA,H=this.hs,hb=new Float32Array(x.length);let s=0;
   for(let i=0;i<x.length;i++){const v=x[i];H[0]=a*(H[0]+v-H[1]);H[1]=v;const w=H[0];H[2]=a*(H[2]+w-H[3]);H[3]=w;hb[i]=H[2];s+=H[2]*H[2];R[(this.total+i)%L]=v}
   const start=this.total;this.total+=x.length;const db=10*Math.log10(s/x.length+1e-12);this.level=db;
   const capN=Math.round(set.capMs/1000*this.sr),preN=Math.round(PRE_MS/1000*this.sr);
   // фон = 20-й перцентиль уровня за последние ~2 с (короткие звуки его не поднимают)
   const hs=this.hist;hs.push(db);if(hs.length>Math.round(2*this.sr/x.length))hs.shift();const so=[...hs].sort((p,q)=>p-q);this.bg=so[Math.floor(so.length*0.2)];
-  if(this.pend){if(this.total>=this.pend.end){const p=this.pend;this.pend=null;const seg=new Float32Array(p.end-p.start);for(let i=0;i<seg.length;i++)seg[i]=R[(p.start+i)%L];this.onSeg(seg,this.sr,p.on)}return}
+  // готовые отрезки (их может быть несколько одновременно: «взял» и сразу «положил»)
+  while(this.pends.length&&this.total>=this.pends[0].end){const p=this.pends.shift();const seg=new Float32Array(p.end-p.start);for(let i=0;i<seg.length;i++)seg[i]=R[(p.start+i)%L];this.onSeg(seg,this.sr,p.on)}
+  const rc=this.recent;rc.push(db);if(rc.length>4)rc.shift();
   if(start<this.sr*0.5)return;
   const thr=Math.max(this.bg+set.sens,set.minDb);
-  if(db>thr&&start-this.last>capN+0.15*this.sr&&start>=this.mute){
+  if(db<thr-2)this.armed=true;
+  // новый звук: уровень выше порога и либо до этого было тихо, либо резкий скачок громкости (второй звук поверх хвоста первого)
+  const jump=db-Math.min(...rc.slice(0,-1))>=12;
+  if(db>thr&&(this.armed||jump)&&start-this.last>0.25*this.sr&&start>=this.mute){
    let on=start;for(let j=0;j<x.length;j+=128){let e=0;const k=Math.min(j+128,x.length);for(let i=j;i<k;i++)e+=hb[i]*hb[i];if(10*Math.log10(e/(k-j)+1e-12)>thr){on=start+j;break}}
-   this.last=on;this.pend={start:Math.max(0,on-preN),end:on+capN,on};if(this.onTrig)this.onTrig(on)}}
+   this.last=on;this.armed=false;this.pends.push({start:Math.max(0,on-preN),end:on+capN,on});if(this.onTrig)this.onTrig(on)}}
 }
 /*/DSP*/
 
@@ -400,10 +404,10 @@ class Detector{
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=n=>n.toLocaleString('ru-RU').replace(/ /g,' ')+' ₭';
-const DEF={sens:6,minDb:-60,capMs:400,minSim:78,beep:false,vis:true,redPct:5,voice:true,rec:false,recG:1,adv:true};
-let set={...DEF};try{Object.assign(set,JSON.parse(localStorage.getItem('abiuho-set4')||'{}'))}catch(e){}
+const DEF={sens:6,minDb:-60,capMs:400,minSim:75,beep:false,vis:true,redPct:5,voice:true,rec:false,recG:1,adv:true};
+let set={...DEF};try{Object.assign(set,JSON.parse(localStorage.getItem('abiuho-set5')||'{}'))}catch(e){}
 set.rec=false;
-const saveSet=()=>{try{localStorage.setItem('abiuho-set4',JSON.stringify(set))}catch(e){}};
+const saveSet=()=>{try{localStorage.setItem('abiuho-set5',JSON.stringify(set))}catch(e){}};
 const S={ctx:null,stream:null,proc:null,src:null,det:null,pctx:null};
 let CAT=[];let RECENT=[];let sizeF='';let lastNow=null;
 
@@ -421,7 +425,7 @@ const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 function addRef(g,f32,sr,id,created){const pcm=toI16(f32);const e={id:id||uid(),g,sr,pcm,created:created||Date.now(),feat:features(f32,sr)};CAT.push(e);return e}
 
 /* ===== Распознавание ===== */
-function match(feat){const best={};for(const e of CAT){const s=sim(feat,e.feat);if(!best[e.g]||s>best[e.g].s)best[e.g]={g:e.g,s}}return Object.values(best).sort((a,b)=>b.s-a.s)}
+function match(feat){const best={};for(const e of CAT){const s=sim(feat,e.feat);if(!best[e.g]||s>best[e.g].s)best[e.g]={g:e.g,s,kind:e.kind||null}}return Object.values(best).sort((a,b)=>b.s-a.s)}
 const pct=s=>Math.round(Math.max(0,s)*100);const MAYBE=0.6;
 
 function drawSpec(cv,feat){const T=feat.T;if(!T)return;cv.width=T;cv.height=NMEL;const c=cv.getContext('2d'),img=c.createImageData(T,NMEL);
@@ -434,14 +438,18 @@ let sizeSel=null;
 function view(it){const top=it.matches[0];if(!top)return null;const G=GROUPS[top.g-1],auto=sizeKey(it.size);
  const autoFits=!!auto&&G.items.some(x=>x.ns===auto);const key=sizeSel===null?(autoFits?auto:''):sizeSel;
  const list=key?G.items.filter(x=>x.ns===key):G.items;return{G,top,auto,autoFits,key,list,red:list.filter(x=>x.t==='M').length}}
+const TN={M:['красный','красных'],L:['золотой','золотых'],E:['фиолетовый','фиолетовых'],R:['синий','синих'],C:['белый','белых']};
+// состав: «3 красных · 1 фиолетовый»
+function compo(list){const c={};for(const x of list)c[x.t]=(c[x.t]||0)+1;return['M','L','E','R','C'].filter(t=>c[t]).map(t=>c[t]+' '+(c[t]%10===1&&c[t]%100!==11?TN[t][0]:TN[t][1])).join(' · ')}
+const stage=it=>it.merged?'итог по «взял» + «положил»':it.kind==='взять'?'«взял» — жду «положил»':it.kind==='положить'?'только «положил» — не считается':'';
 function showNow(it){lastNow=it;const card=$('now');card.classList.remove('red','hit');const m=it.matches,top=m[0],th=set.minSim/100;
  $('nowAlt').textContent=(top&&top.s>=MAYBE?'Другие варианты: ':'')+m.slice(top&&top.s>=MAYBE?1:0,4).map(x=>'№'+x.g+' '+pct(x.s)+'%').join(' · ');
  drawSpec($('nowSpec'),it.feat);putShot($('nowShot'),it.size&&it.size.shot);
  if(!CAT.length){$('nowLabel').textContent='Звук пойман';$('nowSub').textContent='Звуки не загружены — загрузи файл со звуками';$('nowItemsWrap').hidden=true;return}
  if(!top||top.s<MAYBE){$('nowLabel').textContent='Не узнал';$('nowSub').textContent=top?'Ближе всего №'+top.g+' ('+pct(top.s)+'%) — скорее всего, это не звук ящика':'';$('nowItemsWrap').hidden=true;return}
- const V=view(it),G=V.G,sure=top.s>=th;card.classList.add(V.red&&sure?'red':'hit');
+ const V=view(it),G=V.G,sure=top.s>=th,counts=it.merged||!it.kind;card.classList.add(V.red&&sure&&counts?'red':'hit');
  $('nowLabel').innerHTML=(sure?'':'Похоже на ')+'№'+G.g+' · '+esc(G.d)+(V.key?'<span class="sizetag">'+V.key+'</span>':'')+(V.red?'<span class="redtag">КРАСНОЕ '+Math.round(V.red/V.list.length*100)+'% · '+V.red+' из '+V.list.length+'</span>':'');
- let sub=(sure?'Совпадение ':'Не уверен, совпадение ')+pct(top.s)+'%';
+ let sub=compo(V.list)+' · '+(sure?'совпадение ':'не уверен, совпадение ')+pct(top.s)+'%'+(stage(it)?' · '+stage(it):'');
  if(V.auto&&!V.autoFits&&sizeSel===null)sub+=' · ящик '+V.auto+', но в этой группе таких нет — показываю все';
  sub+=V.red?' — может быть красное':(V.key?' — красного такого размера нет':' — красных в группе нет');
  $('nowSub').textContent=sub;renderItems(it);$('nowItemsWrap').hidden=false;renderPip(it)}
@@ -556,29 +564,35 @@ function alertRed(it){const c=redChance(it);if(!c||!c.sure||!c.V.red)return;cons
  const spoken=set.voice&&say(n+' '+percentWord(n));if(set.beep||(set.voice&&!spoken))beep(c.p);
  document.title='● Красное '+n+'% — Ухо торговца';setTimeout(()=>document.title='Ухо торговца — ABI',4000)}
 // «взял» и «положил» одного ящика: объединяем два звука — среднее сходство по каждой группе
-let lastEv=null;
+// Пара «взял → положил» одного ящика. «Положил» без «взял» (перенос кнопкой F) не считается.
+let pick=null;
 function sameCargo(a,b){if(!a||!b)return true;const[ax,ay,aw,ah]=a.box,[bx,by,bw,bh]=b.box;const ix=Math.max(0,Math.min(ax+aw,bx+bw)-Math.max(ax,bx)),iy=Math.max(0,Math.min(ay+ah,by+bh)-Math.max(ay,by));return ix*iy>0.5*Math.min(aw*ah,bw*bh)}
-function mergeWithPrev(it){const now=Date.now();
- if(lastEv&&now-lastEv.at<2500&&!lastEv.merged&&sameCargo(lastEv.it.size,it.size)){const prev=new Map(lastEv.it.matches.map(x=>[x.g,x.s]));
-  it.single=it.matches;it.matches=it.matches.map(x=>({g:x.g,s:prev.has(x.g)?(x.s+prev.get(x.g))/2:x.s*0.5})).sort((a,b)=>b.s-a.s);
-  if(!it.size)it.size=lastEv.it.size;it.merged=true;const t=it.node&&it.node.querySelector('.meta');if(t)t.textContent+=' · вместе с прошлым звуком'}
- lastEv={at:now,it,merged:!!it.merged};return!!it.merged}
+function mergeInto(it,prev){const pm=new Map(prev.matches.map(x=>[x.g,x.s]));it.single=it.matches;
+ it.matches=it.matches.map(x=>({g:x.g,kind:x.kind,s:pm.has(x.g)?(x.s+pm.get(x.g))/2:x.s*0.5})).sort((a,b)=>b.s-a.s);
+ if(!it.size)it.size=prev.size;it.merged=true;const t=it.node&&it.node.querySelector('.meta');if(t)t.textContent+=' · «положил», вместе с «взял»'}
 function onLive(seg,sr,on){const size=on!=null&&VIS.results.has(on)?VIS.results.get(on):null;sizeSel=null;const it=addRecent(seg,sr,'игра',size);if(!it)return;
  if(set.rec){const e2=addRef(set.recG,seg,sr);dbPut(e2);it.node.querySelector('[data-a=save]').textContent='Сохранено';it.node.querySelector('select').value=set.recG;
   status('Эталон записан в №'+set.recG,true);if(set.adv&&set.recG<38){set.recG++;$('recG').value=set.recG;saveSet()}renderCat();refreshTitles();return}
- const top0=it.matches[0];
+ const top0=it.matches[0],now=Date.now();
  // не узнанный звук сразу после нашей же фразы — скорее всего, это и есть фраза: экран не трогаем
- if((!top0||top0.s<MAYBE)&&Date.now()-spokeAt<2500)return;
- // первый звук ящика («взял») — только показываем; второй («положил») объединяем с ним и тогда сообщаем итог
- const put=top0&&top0.s>=MAYBE?mergeWithPrev(it):false;
- if(put){const el=it.node&&it.node.querySelector('.ttl');if(el)el.innerHTML=itemTitle(it)}
- showNow(it);if(put)alertRed(it)}
+ if((!top0||top0.s<MAYBE)&&now-spokeAt<2500)return;
+ if(!top0||top0.s<MAYBE){showNow(it);return}
+ const kind=top0.kind;it.kind=kind;
+ if(kind==='взять'){pick={at:now,it,done:false};const t=it.node&&it.node.querySelector('.meta');if(t)t.textContent+=' · «взял»';showNow(it);return}
+ // «положил» после «взял» того же ящика: итог по двум звукам
+ if(pick&&now-pick.at<3000&&sameCargo(pick.it.size,it.size)){mergeInto(it,pick.it);pick.done=true;pick=null;
+  const el=it.node&&it.node.querySelector('.ttl');if(el)el.innerHTML=itemTitle(it);showNow(it);alertRed(it);return}
+ if(kind===null){pick={at:now,it,done:false};showNow(it);return}
+ // «положил» без «взял» (перенос кнопкой F) — не считается
+ const t=it.node&&it.node.querySelector('.meta');if(t)t.textContent+=' · «положил» без «взял» — пропущен';showNow(it)}
+// «взял» есть, а «положил» не пойман за 1,2 с (держишь ящик или звук потерялся) — сообщаем по одному «взял»
+function pickTick(){if(pick&&!pick.done&&Date.now()-pick.at>1200){pick.done=true;alertRed(pick.it)}}
 function stop(){try{S.proc&&S.proc.disconnect()}catch(e){}try{S.src&&S.src.disconnect()}catch(e){}if(S.stream)S.stream.getTracks().forEach(t=>t.stop());if(S.ctx)S.ctx.close().catch(()=>{});
  S.ctx=S.stream=S.proc=S.src=S.det=null;visStop();status('Не слушаю')}
 function attach(stream,label){stop();const ctx=new AudioContext();S.ctx=ctx;S.stream=stream;if(ctx.sampleRate!==builtinSr)loadBuiltins(ctx.sampleRate);
  S.det=new Detector(ctx.sampleRate,()=>set,onLive);S.det.onTrig=on=>visTrig(on,ctx.sampleRate);visStart(stream);
  const src=ctx.createMediaStreamSource(stream),proc=ctx.createScriptProcessor(1024,2,1);
- proc.onaudioprocess=e=>{const ib=e.inputBuffer,a=ib.getChannelData(0),b=ib.numberOfChannels>1?ib.getChannelData(1):a,m=new Float32Array(a.length);for(let i=0;i<a.length;i++)m[i]=(a[i]+b[i])*0.5;if(S.det){S.det.feed(m);visTick(S.det.total,S.det.sr)}e.outputBuffer.getChannelData(0).fill(0)};
+ proc.onaudioprocess=e=>{const ib=e.inputBuffer,a=ib.getChannelData(0),b=ib.numberOfChannels>1?ib.getChannelData(1):a,m=new Float32Array(a.length);for(let i=0;i<a.length;i++)m[i]=(a[i]+b[i])*0.5;if(S.det){S.det.feed(m);visTick(S.det.total,S.det.sr);pickTick()}e.outputBuffer.getChannelData(0).fill(0)};
  src.connect(proc);proc.connect(ctx.destination);S.src=src;S.proc=proc;
  stream.getTracks().forEach(t=>t.addEventListener('ended',()=>{if(S.stream===stream)stop()}));status('Слушаю: '+label,true)}
 $('bDisp').onclick=async()=>{try{const st=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:{ideal:30,max:30}},audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false},systemAudio:'include',selfBrowserSurface:'exclude'});
@@ -600,9 +614,9 @@ async function openPip(){if(!('documentPictureInPicture' in window)){status('О�
   w.document.title='Ухо торговца';w.document.body.innerHTML='<div id="p"><div class="l">Жду звук…</div><div class="s">Дёрни ящик у торговца</div></div>';PIP=w;w.addEventListener('pagehide',()=>{PIP=null});if(lastNow)renderPip(lastNow)}catch(e){status('Не удалось открыть окно: '+e.message)}}
 function renderPip(it){if(!PIP)return;const el=PIP.document.getElementById('p');if(!el)return;const top=it.matches[0];
  if(!top||top.s<MAYBE||!CAT.length){el.className='';el.innerHTML='<div class="l">Не узнал</div><div class="s">'+(top?'ближе всего №'+top.g+', '+pct(top.s)+'%':'')+'</div>';return}
- const V=view(it),p=V.list.length?V.red/V.list.length:0,sure=top.s>=set.minSim/100;el.className=V.red&&sure&&p*100>=set.redPct?'red':'';
+ const V=view(it),p=V.list.length?V.red/V.list.length:0,sure=top.s>=set.minSim/100;el.className=V.red&&sure&&p*100>=set.redPct&&(it.merged||!it.kind)?'red':'';
  el.innerHTML=`<div class="l">${sure?'':'Похоже: '}№${V.G.g} ${esc(V.G.d)}${V.key?' · '+V.key:''}</div><div class="big">${V.red?'Красное '+Math.round(p*100)+'%':'Красного нет'}</div>
- <div class="s">${V.red?V.red+' из '+V.list.length+' · ':''}совпадение ${pct(top.s)}%${V.auto&&!V.autoFits&&sizeSel===null?' · размер '+V.auto+' не подошёл':''}</div>
+ <div class="s">${compo(V.list)}</div><div class="s">${stage(it)?stage(it)+' · ':''}совпадение ${pct(top.s)}%${V.auto&&!V.autoFits&&sizeSel===null?' · размер '+V.auto+' не подошёл':''}</div>
  <ul>${[...V.list].sort((a,b)=>b.p-a.p).slice(0,5).map(x=>`<li class="${x.t}"><span class="n">${esc(x.n)}</span><span class="z">${x.s}</span></li>`).join('')}</ul>`}
 $('bPip').onclick=openPip;
 
