@@ -43,6 +43,7 @@ button.sm{min-height:30px;padding:2px 9px;font-size:13px}
 #nowSub{color:var(--mute)}
 #nowAlt{font-size:14px;color:var(--mute);margin-top:4px}
 .redtag{display:inline-block;background:var(--red);color:#fff;font-weight:700;border-radius:6px;padding:1px 8px;font-size:14px;margin-left:6px;vertical-align:middle}
+.shot[hidden]{display:none!important}
 .shot{display:block;max-width:100%;height:auto;border-radius:6px;background:#0e100c;border:1px solid var(--line)}
 #nowShot{max-height:150px;margin-top:10px}
 .snd .shot{max-height:56px;max-width:110px}
@@ -335,19 +336,29 @@ const CargoVision=(()=>{
   for(let q=0;q<2;q++){const mm=tintMask(now,before,q);let c=0;for(let i=0;i<mm.length;i++)c+=mm[i];if(c>cnt){cnt=c;m=mm;k=q}}
   const P0=Phint||hintP(img);if(!m||cnt<(P0*0.35/ST)**2)return null;
   const b=biggestBlob(m,W,H);if(!b||b.n<(P0*0.3/ST)**2)return null;
-  // сетка вокруг подсветки (по кадру «до», если он есть: там линии не закрыты подсветкой)
-  const Gr=G0&&G0.w===img.width&&G0.h===img.height?G0:gray(img);
-  const pad=Math.round(P0*3),rx=Math.max(0,b.x-pad),ry=Math.max(0,b.y-pad),rw=Math.min(img.width,b.x+b.w+pad)-rx,rh=Math.min(img.height,b.y+b.h+pad)-ry;
-  if(rw<P0*2||rh<P0*2)return null;
-  const L=lineMapsG(Gr,rx,ry,rw,rh),pr=runProfiles(L,Math.round(P0*0.5));let grid=null;
-  for(let P=P0*0.85;P<=P0*1.15;P+=0.25){const a=bestPhase(pr.V,P,2),c=bestPhase(pr.H,P,2),sc=a.s+c.s;if(!grid||sc>grid.s)grid={P,fx:a.f,fy:c.f,s:sc}}
-  if(!grid||grid.s<=0.04)return null;
-  const cols=Math.floor((rw-grid.fx)/grid.P),rows=Math.floor((rh-grid.fy)/grid.P);if(cols<1||rows<1)return null;
-  const xs=fitAxis(pr.V,grid.fx,grid.P,cols),ys=fitAxis(pr.H,grid.fy,grid.P,rows),P=(xs[cols]-xs[0])/cols;
-  // доля подсветки в каждой клетке (только из основного пятна: подсветка может быть закрыта картинкой предмета и подсказкой)
+  // Сетка — от краёв самой подсветки: они всегда лежат на линиях клеток. Длинные прямые края — настоящие,
+  // короткие (обрезанные картинкой предмета или подсказкой) — нет. Шаг — ожидаемый, уточняем по противоположным краям.
+  const mm=mainBlob(m,W,H);
+  const eL=new Float32Array(W),eR=new Float32Array(W),eT=new Float32Array(H),eB=new Float32Array(H);
+  for(let y=1;y<H-1;y++)for(let x=1;x<W-1;x++){const i=y*W+x;if(!mm[i])continue;if(!mm[i-1])eL[x]++;if(!mm[i+1])eR[x]++;if(!mm[i-W])eT[y]++;if(!mm[i+W])eB[y]++}
+  const arg=a=>{let bi=0,bv=-1;for(let i=0;i<a.length;i++)if(a[i]>bv){bv=a[i];bi=i}return{p:bi,v:bv}};
+  const axis=(lo,hi)=>{const a=arg(lo),b=arg(hi);const A=a.p*ST,B=(b.p+1)*ST;const n=Math.max(1,Math.round((B-A)/P0)),fit=Math.abs((B-A)/P0-n);
+   return{anchor:a.v>=b.v?A:B,Pa:fit<0.14?(B-A)/n:0,ok:fit<0.14,strong:Math.max(a.v,b.v)}};
+  const ax=axis(eL,eR),ay=axis(eT,eB);
+  let P=P0;const ps=[ax.Pa,ay.Pa].filter(v=>v&&Math.abs(v/P0-1)<0.1);if(ps.length)P=ps.reduce((s,v)=>s+v,0)/ps.length;
+  if(ax.strong*ST<P*0.4&&ay.strong*ST<P*0.4)return null;         // нет ни одного длинного прямого края — это не подсветка
+  const pad=Math.round(P*3),bx0=Math.max(0,b.x-pad),by0=Math.max(0,b.y-pad),bx1=Math.min(img.width,b.x+b.w+pad),by1=Math.min(img.height,b.y+b.h+pad);
+  const kx0=Math.ceil((bx0-ax.anchor)/P),kx1=Math.floor((bx1-ax.anchor)/P),ky0=Math.ceil((by0-ay.anchor)/P),ky1=Math.floor((by1-ay.anchor)/P);
+  const cols=kx1-kx0,rows=ky1-ky0;if(cols<1||rows<1)return null;
+  const rx=0,ry=0,rw=img.width,rh=img.height;
+  const xs=Array.from({length:cols+1},(_,k)=>Math.round(ax.anchor+(kx0+k)*P)),ys=Array.from({length:rows+1},(_,k)=>Math.round(ay.anchor+(ky0+k)*P));
+  // доля подсветки в каждой клетке (только из основного пятна: подсветка может быть закрыта картинкой предмета и подсказкой).
+  // Клетки, которые были такого же цвета ещё ДО звука (цветной фон предмета по редкости), подсветкой не считаются.
+  const pre=before?tintMask(before,null,k):null,cur=tintMask(now,null,k);
   m=mainBlob(m,W,H);const TH=0.08;
-  const fr=[];for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){const x0=rx+xs[c],x1=rx+xs[c+1],y0=ry+ys[r],y1=ry+ys[r+1],ins=Math.round(P*0.1);let n=0,h=0;
-   for(let y=Math.ceil((y0+ins)/ST);y<Math.floor((y1-ins)/ST);y++)for(let x=Math.ceil((x0+ins)/ST);x<Math.floor((x1-ins)/ST);x++){n++;h+=m[y*W+x]}fr.push(n?h/n:0)}
+  const fr=[],pf=[],cf=[];for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){const x0=rx+xs[c],x1=rx+xs[c+1],y0=ry+ys[r],y1=ry+ys[r+1],ins=Math.round(P*0.1);let n=0,h=0,hp=0,hc=0;
+   for(let y=Math.ceil((y0+ins)/ST);y<Math.floor((y1-ins)/ST);y++)for(let x=Math.ceil((x0+ins)/ST);x<Math.floor((x1-ins)/ST);x++){const i=y*W+x;n++;h+=m[i];if(pre)hp+=pre[i];hc+=cur[i]}
+   pf.push(n?hp/n:0);cf.push(n?hc/n:0);fr.push(n&&(!pre||hp/n<0.12)?h/n:0)}
   // клетки с подсветкой, связанные с центром найденного пятна
   const cx=b.x+b.w/2,cy=b.y+b.h/2;let start=-1,bd=1e9;
   for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){const i=r*cols+c;if(fr[i]<TH)continue;const d=Math.hypot(rx+(xs[c]+xs[c+1])/2-cx,ry+(ys[r]+ys[r+1])/2-cy);if(d<bd){bd=d;start=i}}
@@ -356,6 +367,9 @@ const CargoVision=(()=>{
   const cs=[...sel].map(i=>i%cols),ks=[...sel].map(i=>(i-i%cols)/cols),c0=Math.min(...cs),k0=Math.min(...ks),cw=Math.max(...cs)-c0+1,ch=Math.max(...ks)-k0+1;
   if(cw>6||ch>6)return null;
   if(sel.size<cw*ch*0.6)return null;                 // не прямоугольник — что-то другое
+  // подсветка упирается в клетку с цветным фоном предмета — её настоящий размер не виден, не гадаем
+  for(const i of sel){const c=i%cols,r=(i-c)/cols;for(const[dc,dr]of[[1,0],[-1,0],[0,1],[0,-1]]){const cc=c+dc,rr=r+dr,j=rr*cols+cc;
+   if(cc>=0&&rr>=0&&cc<cols&&rr<rows&&!sel.has(j)&&pf[j]>=0.12&&cf[j]>=0.12)return null}}
   // подсветка лежит ровно на клетках: внутри прямоугольника её много, снаружи почти нет
   {let inH=0,inN=0,outH=0;const X0=rx+xs[c0],X1=rx+xs[c0+cw],Y0=ry+ys[k0],Y1=ry+ys[k0+ch];
    for(let y=Math.floor(ry/ST);y<Math.floor((ry+rh)/ST);y++)for(let x=Math.floor(rx/ST);x<Math.floor((rx+rw)/ST);x++){const px=x*ST,py=y*ST,v=m[y*W+x];
@@ -515,7 +529,9 @@ function view(it){const top=it.matches[0];if(!top)return null;const G=GROUPS[top
  const autoFits=!!auto&&G.items.some(x=>x.ns===auto);let key='',st;
  if(sizeSel==='')st='all';else if(sizeSel){key=sizeSel;st='ok'}else if(auto){key=auto;st=autoFits?'ok':'nosuch'}else st='unknown';
  const list=st==='all'?G.items:st==='ok'?G.items.filter(x=>x.ns===key):[];return{G,top,auto,autoFits,key,st,list,red:list.filter(x=>x.t==='M').length}}
-const stText=V=>V.st==='nosuch'?'Ящика '+V.key+' с таким звуком нет':V.st==='unknown'?'Размер ящика не определился — выбери размер кнопкой':'';
+const stText=V=>V.st==='nosuch'?'Ящика '+V.key+' с таким звуком нет':V.st==='unknown'?visWhy():'';
+// почему размер не определился: выключено, нет картинки экрана или просто не нашли подсветку
+function visWhy(){if(!set.vis)return'Определение размера выключено — включи галочку «Определять размер ящика по экрану»';if(!VIS.latest&&!VIS.video)return'Сайт не видит экран — нажми «Слушать игру» и выбери «Весь экран» со звуком';return'Размер не определился — оттяни ящик на пустые клетки, чтобы появилась подсветка'}
 const TN={M:['красный','красных'],L:['золотой','золотых'],E:['фиолетовый','фиолетовых'],R:['синий','синих'],C:['белый','белых']};
 // состав: «3 красных · 1 фиолетовый»
 function compo(list){const c={};for(const x of list)c[x.t]=(c[x.t]||0)+1;return['M','L','E','R','C'].filter(t=>c[t]).map(t=>c[t]+' '+(c[t]%10===1&&c[t]%100!==11?TN[t][0]:TN[t][1])).join(' · ')}
@@ -608,7 +624,7 @@ function visTick(total,sr){if(!set.vis||(!VIS.latest&&!VIS.video))return;
 function pickBefore(on,sr){let b=null;for(const s of VIS.snaps)if(s.at<on-0.12*sr)b=s;return b||VIS.snaps[0]||null}
 function bestRes(rs){if(!rs.length)return null;const r=[...rs].sort((a,b)=>b.conf-a.conf||b.w*b.h-a.w*a.h)[0];
  if(r.agree){VIS.Phist.push(r.P);if(VIS.Phist.length>15)VIS.Phist.shift();const s=[...VIS.Phist].sort((a,b)=>a-b);if(s.length>=3)VIS.P=s[s.length>>1]}return r}
-function visTrig(on,sr){if(!set.vis||(!VIS.latest&&!VIS.video))return;VIS.jobs.push({on,due:[0.15,0.3,0.45,0.6].map(t=>on+Math.round(t*sr)),res:[],frames:[]})}
+function visTrig(on,sr){if(!set.vis||(!VIS.latest&&!VIS.video))return;VIS.jobs.push({on,due:[0.15,0.3,0.45,0.6,0.75].map(t=>on+Math.round(t*sr)),res:[],frames:[]})}
 // картинка вокруг найденного ящика с рамкой — чтобы было видно, какой ящик тянули
 function cropShot(r){const src=VIS.canvas;if(!src)return null;const[bx,by,bw,bh]=r.box,pad=Math.round(Math.max(bw,bh)*0.35+10);
  const x0=Math.max(0,bx-pad),y0=Math.max(0,by-pad),w=Math.min(src.width,bx+bw+pad)-x0,h0=Math.min(src.height,by+bh+pad)-y0;
@@ -707,7 +723,7 @@ $('bPip').onclick=openPip;
 // кадры звука одной картинкой: «до» и два кадра «после» (с рамкой найденного ящика) — для настройки определителя
 function dbgBlob(before,after,res){return new Promise(ok=>{try{const fr=[before,...after].filter(Boolean);if(!fr.length)return ok(null);
  const W=fr[0].width,H=fr[0].height,c=document.createElement('canvas');c.width=W;c.height=H*fr.length;const x=c.getContext('2d');
- fr.forEach((f,i)=>{x.putImageData(f,0,i*H);x.fillStyle='#000a';x.fillRect(0,i*H,420,44);x.fillStyle='#ffd84a';x.font='bold 28px sans-serif';x.fillText(i===0&&before?'ДО ЗВУКА':'ПОСЛЕ +'+['0,15','0,3','0,45','0,6'][i-(before?1:0)]+' с',12,i*H+32)});
+ fr.forEach((f,i)=>{x.putImageData(f,0,i*H);x.fillStyle='#000a';x.fillRect(0,i*H,420,44);x.fillStyle='#ffd84a';x.font='bold 28px sans-serif';x.fillText(i===0&&before?'ДО ЗВУКА':'ПОСЛЕ +'+['0,15','0,3','0,45','0,6','0,75'][i-(before?1:0)]+' с',12,i*H+32)});
  if(res){x.strokeStyle='#ffd84a';x.lineWidth=3;const[bx,by,bw,bh]=res.box;for(let i=before?1:0;i<fr.length;i++)x.strokeRect(bx,by+i*H,bw,bh)}
  c.toBlob(b=>ok(b),'image/jpeg',0.92)}catch(e){ok(null)}})}
 async function saveFrames(it){if(!it||!it.dbg){status('У этого звука нет кадров: нужно «Слушать игру» → «Весь экран» со звуком');return}
