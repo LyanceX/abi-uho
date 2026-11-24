@@ -356,9 +356,11 @@ const CargoVision=(()=>{
   // Клетки, которые были такого же цвета ещё ДО звука (цветной фон предмета по редкости), подсветкой не считаются.
   const pre=before?tintMask(before,null,k):null,cur=tintMask(now,null,k);
   m=mainBlob(m,W,H);const TH=0.08;
-  const fr=[],pf=[],cf=[];for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){const x0=rx+xs[c],x1=rx+xs[c+1],y0=ry+ys[r],y1=ry+ys[r+1],ins=Math.round(P*0.1);let n=0,h=0,hp=0,hc=0;
-   for(let y=Math.ceil((y0+ins)/ST);y<Math.floor((y1-ins)/ST);y++)for(let x=Math.ceil((x0+ins)/ST);x<Math.floor((x1-ins)/ST);x++){const i=y*W+x;n++;h+=m[i];if(pre)hp+=pre[i];hc+=cur[i]}
-   pf.push(n?hp/n:0);cf.push(n?hc/n:0);fr.push(n&&(!pre||hp/n<0.12)?h/n:0)}
+  // «был ли цветным» считаем только по тёмным пикселям кадра «до» (без яркой картинки предмета);
+  // клетку, которую картинка закрывала почти целиком, считаем занятой предметом — не подсветкой
+  const fr=[],pf=[],cf=[];for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){const x0=rx+xs[c],x1=rx+xs[c+1],y0=ry+ys[r],y1=ry+ys[r+1],ins=Math.round(P*0.1);let n=0,h=0,hp=0,hc=0,nd=0;
+   for(let y=Math.ceil((y0+ins)/ST);y<Math.floor((y1-ins)/ST);y++)for(let x=Math.ceil((x0+ins)/ST);x<Math.floor((x1-ins)/ST);x++){const i=y*W+x;n++;h+=m[i];hc+=cur[i];if(pre&&before.mx[i]<130){nd++;hp+=pre[i]}}
+   const pre_=pre?(nd<n*0.25?1:hp/nd):0;pf.push(pre_);cf.push(n?hc/n:0);fr.push(n&&pre_<0.12?h/n:0)}
   // клетки с подсветкой, связанные с центром найденного пятна
   const cx=b.x+b.w/2,cy=b.y+b.h/2;let start=-1,bd=1e9;
   for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){const i=r*cols+c;if(fr[i]<TH)continue;const d=Math.hypot(rx+(xs[c]+xs[c+1])/2-cx,ry+(ys[r]+ys[r+1])/2-cy);if(d<bd){bd=d;start=i}}
@@ -618,7 +620,7 @@ function visFrame(){const s=VIS.latest||VIS.video;if(!s)return null;const sw=s.d
 function visTick(total,sr){if(!set.vis||(!VIS.latest&&!VIS.video))return;
  if(VIS.jobs.length){const j=VIS.jobs[0];if(total>=j.due[0]){j.due.shift();const img=visFrame();
    if(img){const bf=pickBefore(j.on,sr);let r=null;if(bf)r=CargoVision.analyzeTint(img,bf.t,VIS.P||CargoVision.hintP(img),bf.g);j.frames.push(img);j.bf=bf;if(r){r.shot=cropShot(r);j.res.push(r)}}
-   if(!j.due.length){VIS.jobs.shift();const br=bestRes(j.res);VIS.results.set(j.on,br);onVisDone(j.on,br);VIS.dbgMap.set(j.on,dbgBlob(j.bf&&j.bf.img,j.frames,br));if(VIS.dbgMap.size>12)VIS.dbgMap.delete(VIS.dbgMap.keys().next().value);if(VIS.results.size>30)VIS.results.delete(VIS.results.keys().next().value)}}
+   if(!j.due.length){VIS.jobs.shift();const br=bestRes(j.res);VIS.results.set(j.on,br);VIS.dbgMap.set(j.on,dbgBlob(j.bf&&j.bf.img,j.frames,br));onVisDone(j.on,br);if(VIS.dbgMap.size>12)VIS.dbgMap.delete(VIS.dbgMap.keys().next().value);if(VIS.results.size>30)VIS.results.delete(VIS.results.keys().next().value)}}
   return}
  if(total>=VIS.nextSnap){VIS.nextSnap=total+Math.round(0.4*sr);const img=visFrame();if(img){VIS.snaps.push({at:total,t:CargoVision.tints(img),g:CargoVision.gray(img),img});if(VIS.snaps.length>3)VIS.snaps.shift()}}}
 function pickBefore(on,sr){let b=null;for(const s of VIS.snaps)if(s.at<on-0.12*sr)b=s;return b||VIS.snaps[0]||null}
