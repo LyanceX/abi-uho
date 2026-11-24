@@ -131,9 +131,9 @@ code{font-family:"JetBrains Mono",monospace;font-size:13px;background:#0e100c;pa
     <label class="set">Тише этого не ловить, дБ <span id="vMin"></span><input type="range" id="sMin" min="-80" max="-20" step="1"></label>
     <label class="set">Длина звука, мс <span id="vCap"></span><input type="range" id="sCap" min="250" max="1200" step="50"></label>
     <label class="set">Порог узнавания, % <span id="vSim"></span><input type="range" id="sSim" min="60" max="95" step="1"></label>
-    <label class="chk"><input type="checkbox" id="cBeep"> Пикать, если шанс красного высокий</label>
-    <label class="set">Пикать при шансе красного от, % <span id="vRed"></span><input type="range" id="sRed" min="5" max="100" step="5"></label>
-    <label class="chk"><input type="checkbox" id="cVoice"> Говорить голосом («красное, 50 процентов»)</label>
+    <label class="chk"><input type="checkbox" id="cVoice"> Говорить шанс красного голосом («75 процентов»)</label>
+    <label class="chk"><input type="checkbox" id="cBeep"> Пикать (вместе с голосом или вместо него)</label>
+    <label class="set">Сообщать, если шанс красного от, % <span id="vRed"></span><input type="range" id="sRed" min="5" max="100" step="5"></label>
     <label class="chk"><input type="checkbox" id="cVis"> Определять размер ящика по экрану</label>
     <hr style="border:0;border-top:1px solid var(--line);margin:14px 0 4px">
     <label class="chk"><input type="checkbox" id="cRec"> Запись эталонов: каждый пойманный звук → в группу</label>
@@ -165,7 +165,7 @@ code{font-family:"JetBrains Mono",monospace;font-size:13px;background:#0e100c;pa
       <li>Отключи «улучшайзеры» звука: Sonar, Nahimic, Dolby Atmos, Windows Sonic, эквалайзеры — они меняют звук и ломают сравнение.</li>
       <li>Один раз загрузи файл со звуками <code>abi-uho-zvuki.json</code> (кнопка «Импорт» в каталоге или жёлтая плашка сверху). Записывать самому ничего не нужно. Если какой-то ящик узнаётся плохо, добавь свою запись: в ленте «Пойманные звуки» выбери правильную группу и нажми «В эталон».</li>
       <li>Нажми «Окно поверх игры» — маленькое окно останется поверх игры, сворачивать игру не нужно (игра должна быть в режиме «Окно без рамки», не «Полный экран»). Можно и без окна: сайт пищит сам.</li>
-      <li>В рейде у торговца хватай ящик, отводи в сторону и отпускай — он вернётся на место. Сайт слышит «взял» и «положил», определяет размер ящика по экрану и пищит, только если шанс красного не ниже порога в настройках. Тяни ящики по одному, без двойных кликов. На экране «Последний звук» — группа, предметы и есть ли среди них красные. Кнопки размера приглушают предметы другого размера.</li>
+      <li>В рейде у торговца хватай ящик, отводи в сторону и отпускай — он вернётся на место. Сайт слышит «взял» и «положил» (оба звука объединяются для точности), определяет размер ящика по экрану и после «положил» говорит итоговый шанс красного по обоим звукам: «75 процентов». На одиночный звук и при 0% молчит. Тяни ящики по одному, без двойных кликов. На экране «Последний звук» — группа, предметы и есть ли среди них красные. Кнопки размера приглушают предметы другого размера.</li>
       <li>Режим «Запись эталонов» нужен, только если после патча звуки поменяются: выбери группу, дёрни такой ящик — запись сохранится.</li>
       <li>Свои записи хранятся в этом браузере. «Экспорт эталонов» → кинь файл друзьям, они делают «Импорт».</li>
     </ol>
@@ -400,10 +400,10 @@ class Detector{
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=n=>n.toLocaleString('ru-RU').replace(/ /g,' ')+' ₭';
-const DEF={sens:6,minDb:-60,capMs:400,minSim:78,beep:true,vis:true,redPct:30,voice:false,rec:false,recG:1,adv:true};
-let set={...DEF};try{Object.assign(set,JSON.parse(localStorage.getItem('abiuho-set3')||'{}'))}catch(e){}
+const DEF={sens:6,minDb:-60,capMs:400,minSim:78,beep:false,vis:true,redPct:5,voice:true,rec:false,recG:1,adv:true};
+let set={...DEF};try{Object.assign(set,JSON.parse(localStorage.getItem('abiuho-set4')||'{}'))}catch(e){}
 set.rec=false;
-const saveSet=()=>{try{localStorage.setItem('abiuho-set3',JSON.stringify(set))}catch(e){}};
+const saveSet=()=>{try{localStorage.setItem('abiuho-set4',JSON.stringify(set))}catch(e){}};
 const S={ctx:null,stream:null,proc:null,src:null,det:null,pctx:null};
 let CAT=[];let RECENT=[];let sizeF='';let lastNow=null;
 
@@ -461,7 +461,7 @@ function makeNode(it){const d=document.createElement('div');d.className='snd';d.
  d.innerHTML=`<div class="row" style="gap:6px;flex-wrap:nowrap"><canvas class="spec" style="width:110px"></canvas><canvas class="shot" hidden></canvas></div><div><div class="ttl">${itemTitle(it)}</div><div class="meta">${t} · ${esc(it.src)}</div></div>
  <div class="act"><button class="sm" data-a="play">▶</button><select aria-label="Группа">${groupOpts(top?top.g:set.recG)}</select><button class="sm" data-a="save">В эталон</button><button class="sm" data-a="del" aria-label="Убрать">✕</button></div>`;
  drawSpec(d.querySelector('.spec'),it.feat);putShot(d.querySelector('.shot'),it.size&&it.size.shot);it.node=d;return d}
-function refreshTitles(){for(const it of RECENT){it.matches=match(it.feat);const el=it.node&&it.node.querySelector('.ttl');if(el)el.innerHTML=itemTitle(it)}}
+function refreshTitles(){for(const it of RECENT){if(it.merged)continue;it.matches=match(it.feat);const el=it.node&&it.node.querySelector('.ttl');if(el)el.innerHTML=itemTitle(it)}}
 function addRecent(seg,sr,src,size){const feat=features(seg,sr);if(feat.T<4)return null;
  const it={id:uid(),seg,sr,feat,src,size:size||null,t:Date.now(),matches:match(feat)};RECENT.unshift(it);
  const box=$('recent');if(RECENT.length===1)box.innerHTML='';box.prepend(makeNode(it));
@@ -539,20 +539,40 @@ function beep(p){if(!S.ctx)return;const c=S.ctx,t=c.currentTime,n=p>=0.99?3:2,f=
  for(let k=0;k<n;k++){const o=c.createOscillator(),g=c.createGain();o.frequency.value=f;const t0=t+k*0.18;g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(0.25,t0+0.01);g.gain.exponentialRampToValueAtTime(0.0001,t0+0.14);o.connect(g).connect(c.destination);o.start(t0);o.stop(t0+0.15)}
  muteFor(0.9)}
 function muteFor(sec){if(S.det)S.det.mute=Math.max(S.det.mute,S.det.total+Math.round(sec*S.det.sr))}
-function say(text){if(!set.voice||!('speechSynthesis' in window))return;try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(text);u.lang='ru-RU';u.rate=1.15;speechSynthesis.speak(u);muteFor(2)}catch(e){}}
-let lastAlert={g:0,key:'',at:0};
-// пищим, только если шанс красного (среди предметов этой группы и этого размера) не ниже порога;
-// «взял» и «положил» одного ящика дают один сигнал
-function alertRed(it){const top=it.matches[0],V=view(it);if(!top||top.s<set.minSim/100||!V||!V.red||!V.list.length)return;
- if(V.auto&&!V.autoFits&&sizeSel===null)return;
- const p=V.red/V.list.length;if(p*100<set.redPct)return;
- const now=Date.now();if(lastAlert.g===V.G.g&&lastAlert.key===V.key&&now-lastAlert.at<3500)return;lastAlert={g:V.G.g,key:V.key,at:now};
- if(set.beep)beep(p);say('Красное, '+Math.round(p*100)+' процентов');
- document.title='● Красное '+Math.round(p*100)+'% — Ухо торговца';setTimeout(()=>document.title='Ухо торговца — ABI',4000)}
+// голос: «75 процентов». Русский голос Windows или Chrome; без него — писк
+let ruVoice=null;function pickVoice(){try{const vs=speechSynthesis.getVoices();ruVoice=vs.find(v=>/^ru/i.test(v.lang)&&/google/i.test(v.name))||vs.find(v=>/^ru/i.test(v.lang))||null}catch(e){}}
+if('speechSynthesis' in window){pickVoice();speechSynthesis.onvoiceschanged=pickVoice}
+function percentWord(n){const a=n%100,b=n%10;if(a>=11&&a<=14)return'процентов';if(b===1)return'процент';if(b>=2&&b<=4)return'процента';return'процентов'}
+let spokeAt=0;
+function say(text){if(!('speechSynthesis' in window)||!ruVoice)return false;try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(text);u.voice=ruVoice;u.lang=ruVoice.lang;u.rate=1.2;speechSynthesis.speak(u);spokeAt=Date.now();return true}catch(e){return false}}
+let lastAlert={g:0,key:'',pct:-1,at:0};
+// шанс красного = доля красных среди предметов этой группы (и этого размера ящика, если он определился)
+function redChance(it){const top=it.matches[0],V=view(it);if(!top||top.s<MAYBE||!V||!V.list.length)return null;
+ if(V.auto&&!V.autoFits&&sizeSel===null)return null;return{V,top,p:V.red/V.list.length,sure:top.s>=set.minSim/100}}
+// говорим процент, если он не ниже порога; при 0% — тишина. Один ящик — одна фраза, если процент не уточнился
+function alertRed(it){const c=redChance(it);if(!c||!c.sure||!c.V.red)return;const n=Math.round(c.p*100);if(n<set.redPct)return;
+ const now=Date.now(),same=lastAlert.g===c.V.G.g&&lastAlert.key===c.V.key&&now-lastAlert.at<3500;if(same&&lastAlert.pct===n)return;
+ lastAlert={g:c.V.G.g,key:c.V.key,pct:n,at:now};
+ const spoken=set.voice&&say(n+' '+percentWord(n));if(set.beep||(set.voice&&!spoken))beep(c.p);
+ document.title='● Красное '+n+'% — Ухо торговца';setTimeout(()=>document.title='Ухо торговца — ABI',4000)}
+// «взял» и «положил» одного ящика: объединяем два звука — среднее сходство по каждой группе
+let lastEv=null;
+function sameCargo(a,b){if(!a||!b)return true;const[ax,ay,aw,ah]=a.box,[bx,by,bw,bh]=b.box;const ix=Math.max(0,Math.min(ax+aw,bx+bw)-Math.max(ax,bx)),iy=Math.max(0,Math.min(ay+ah,by+bh)-Math.max(ay,by));return ix*iy>0.5*Math.min(aw*ah,bw*bh)}
+function mergeWithPrev(it){const now=Date.now();
+ if(lastEv&&now-lastEv.at<2500&&!lastEv.merged&&sameCargo(lastEv.it.size,it.size)){const prev=new Map(lastEv.it.matches.map(x=>[x.g,x.s]));
+  it.single=it.matches;it.matches=it.matches.map(x=>({g:x.g,s:prev.has(x.g)?(x.s+prev.get(x.g))/2:x.s*0.5})).sort((a,b)=>b.s-a.s);
+  if(!it.size)it.size=lastEv.it.size;it.merged=true;const t=it.node&&it.node.querySelector('.meta');if(t)t.textContent+=' · вместе с прошлым звуком'}
+ lastEv={at:now,it,merged:!!it.merged};return!!it.merged}
 function onLive(seg,sr,on){const size=on!=null&&VIS.results.has(on)?VIS.results.get(on):null;sizeSel=null;const it=addRecent(seg,sr,'игра',size);if(!it)return;
  if(set.rec){const e2=addRef(set.recG,seg,sr);dbPut(e2);it.node.querySelector('[data-a=save]').textContent='Сохранено';it.node.querySelector('select').value=set.recG;
-  status('Эталон записан в №'+set.recG,true);if(set.adv&&set.recG<38){set.recG++;$('recG').value=set.recG;saveSet()}renderCat();refreshTitles()}
- showNow(it);alertRed(it)}
+  status('Эталон записан в №'+set.recG,true);if(set.adv&&set.recG<38){set.recG++;$('recG').value=set.recG;saveSet()}renderCat();refreshTitles();return}
+ const top0=it.matches[0];
+ // не узнанный звук сразу после нашей же фразы — скорее всего, это и есть фраза: экран не трогаем
+ if((!top0||top0.s<MAYBE)&&Date.now()-spokeAt<2500)return;
+ // первый звук ящика («взял») — только показываем; второй («положил») объединяем с ним и тогда сообщаем итог
+ const put=top0&&top0.s>=MAYBE?mergeWithPrev(it):false;
+ if(put){const el=it.node&&it.node.querySelector('.ttl');if(el)el.innerHTML=itemTitle(it)}
+ showNow(it);if(put)alertRed(it)}
 function stop(){try{S.proc&&S.proc.disconnect()}catch(e){}try{S.src&&S.src.disconnect()}catch(e){}if(S.stream)S.stream.getTracks().forEach(t=>t.stop());if(S.ctx)S.ctx.close().catch(()=>{});
  S.ctx=S.stream=S.proc=S.src=S.det=null;visStop();status('Не слушаю')}
 function attach(stream,label){stop();const ctx=new AudioContext();S.ctx=ctx;S.stream=stream;if(ctx.sampleRate!==builtinSr)loadBuiltins(ctx.sampleRate);
