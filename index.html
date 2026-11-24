@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ухо торговца — ABI</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<meta name="theme-color" content="#151813">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+/* VOICE: полевой прибор, коротко и по делу
+   IDEA: рация-сканер разведчика: шкала уровня, экран с последним звуком
+   PICTURE: большой экран «последний звук» со спектрограммой и списком предметов
+   COLOUR/TYPE: графит-хаки, сигнальный красный только для мифических; Rubik
+   LAYOUT: источник сверху, экран + настройки, лента звуков, каталог групп */
+:root{color-scheme:dark;--bg:#151813;--panel:#1d211a;--line:#2e3428;--ink:#e9ebe1;--mute:#9aa08c;--kh:#c7bd7d;--red:#ff4b4b;--leg:#e8b43a;--epi:#b07cf0;--rar:#5aa2ff;--com:#c9cdc0}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 Rubik,system-ui,sans-serif;overflow-x:clip}
+.band{padding:22px max(4vw,14px)}
+.wrap{max-width:1240px;margin:0 auto}
+h1{font-size:clamp(28px,4vw,42px);line-height:1.05;margin:0 0 4px;font-weight:700}
+h2{font-size:22px;margin:0 0 12px}
+.lead{color:var(--mute);margin:0 0 16px;max-width:70ch}
+button,.btn,select,input[type=text]{font:inherit;font-size:15px;color:var(--ink);background:#262b22;border:1px solid var(--line);border-radius:8px;min-height:40px;padding:6px 12px;cursor:pointer}
+button:hover,.btn:hover{border-color:var(--kh)}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--kh);outline-offset:2px}
+button.pri{background:var(--kh);color:#151813;border-color:var(--kh);font-weight:500}
+button.sm{min-height:30px;padding:2px 9px;font-size:13px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+#status{color:var(--mute);font-size:14px}
+#status.on{color:#9fe07a}
+.grid{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:16px}
+@media(max-width:860px){.grid{grid-template-columns:minmax(0,1fr)}}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
+.now{position:relative;min-height:330px;transition:background .25s}
+.now.red{background:#3a1414;border-color:var(--red)}
+.now.hit{border-color:var(--kh)}
+.k{font-size:13px;color:var(--mute)}
+#nowLabel{font-size:clamp(26px,3.4vw,38px);font-weight:700;line-height:1.1;margin:4px 0}
+.now.red #nowLabel{color:#ffd9d9}
+#nowSub{color:var(--mute)}
+#nowAlt{font-size:14px;color:var(--mute);margin-top:4px}
+.redtag{display:inline-block;background:var(--red);color:#fff;font-weight:700;border-radius:6px;padding:1px 8px;font-size:14px;margin-left:6px;vertical-align:middle}
+.spec{display:block;width:100%;height:70px;image-rendering:pixelated;border-radius:6px;background:#0e100c}
+#nowSpec{height:84px;margin:12px 0}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 8px}
+.chips button{min-height:30px;font-size:13px;padding:2px 10px}
+.chips button.act{background:var(--kh);color:#151813}
+.items{list-style:none;margin:0;padding:0;max-height:300px;overflow:auto;font-size:14px}
+.items li{display:grid;grid-template-columns:12px minmax(0,1fr) auto auto;gap:8px;align-items:center;padding:4px 2px;border-bottom:1px solid var(--line)}
+.items li.dim{opacity:.3}
+.dot{width:10px;height:10px;border-radius:50%}
+.t-M{background:var(--red)}.t-L{background:var(--leg)}.t-E{background:var(--epi)}.t-R{background:var(--rar)}.t-C{background:var(--com)}
+.num{font-family:"JetBrains Mono",monospace;font-size:13px;white-space:nowrap;text-align:right;color:var(--mute)}
+.items li.M .nm{color:#ff9a9a;font-weight:500}
+.meter{position:relative;height:16px;background:#0e100c;border-radius:6px;overflow:hidden;margin:6px 0 2px}
+#mFill{position:absolute;inset:0 auto 0 0;background:linear-gradient(90deg,#5f7a3c,var(--kh));width:0}
+.mark{position:absolute;top:0;bottom:0;width:2px}
+#mThr{background:var(--red)}#mBg{background:#7fa0c0}
+label.set{display:block;margin:12px 0 0;font-size:14px}
+label.set span{float:right;font-family:"JetBrains Mono",monospace;color:var(--kh)}
+input[type=range]{width:100%;accent-color:var(--kh);height:28px}
+.chk{display:flex;gap:8px;align-items:center;font-size:14px;margin-top:10px}
+.chk input{width:18px;height:18px;accent-color:var(--kh)}
+.snd{display:grid;grid-template-columns:150px minmax(0,1fr) auto;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
+.snd .spec{height:56px}
+.snd b.redtxt{color:#ff8a8a}
+.snd .meta{font-size:13px;color:var(--mute)}
+.snd .act{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end}
+.snd select{max-width:230px}
+@media(max-width:640px){.snd{grid-template-columns:minmax(0,1fr)}.snd .act{justify-content:flex-start}}
+.cat{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:10px}
+.gcard{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:14px}
+.gcard.hasred{border-left:4px solid var(--red)}
+.gcard h3{font-size:15px;margin:0 0 2px}
+.gcard .refs{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+.gcard details summary{cursor:pointer;color:var(--mute);margin-top:4px}
+.gcard.norefs h3{color:var(--mute)}
+details.help summary{cursor:pointer;font-weight:500}
+details.help li{margin:6px 0}
+.empty{color:var(--mute);padding:12px 0}
+code{font-family:"JetBrains Mono",monospace;font-size:13px;background:#0e100c;padding:1px 5px;border-radius:4px;overflow-wrap:anywhere}
+@media(prefers-reduced-motion:reduce){.now{transition:none}}
+</style>
+</head>
+<body>
+<div class="band"><div class="wrap">
+  <h1>Ухо торговца</h1>
+  <p class="lead">Слушает звук игры в фоне. Дёрни ящик у полевого торговца: сайт узнает звуковую группу и покажет, какие предметы так звучат и есть ли среди них красные. Всё считается в браузере, никуда не отправляется.</p>
+  <div class="row">
+    <button id="bDisp" class="pri">Слушать игру</button>
+    <select id="dev" aria-label="Аудиовход"><option value="">Вход: стерео микшер / VB-Cable…</option></select>
+    <button id="bDev">Слушать вход</button>
+    <button id="bStop">Стоп</button>
+    <label class="btn" style="display:inline-flex;align-items:center">Нарезать из файла<input type="file" id="fAudio" accept="audio/*,video/*" multiple hidden></label>
+    <span id="status">Не слушаю</span>
+  </div>
+  <div id="packBanner" class="panel" hidden style="margin-top:14px;border-color:var(--kh)">
+    <b>Сначала загрузи звуки.</b> Звуков ящиков на сайте нет — их файл <code>abi-uho-zvuki.json</code> присылают отдельно. Загрузить нужно один раз: дальше они хранятся в этом браузере.
+    <div class="row" style="margin-top:10px"><label class="btn" style="display:inline-flex;align-items:center;background:var(--kh);color:#151813;font-weight:500">Загрузить файл со звуками<input type="file" class="impFile" accept=".json,application/json" hidden></label></div>
+  </div>
+</div></div>
+
+<div class="band" style="padding-top:0"><div class="wrap grid">
+  <section class="panel now" id="now">
+    <div class="k">Последний звук</div>
+    <div id="nowLabel">Жду звук…</div>
+    <div id="nowSub">Нажми «Слушать игру», наведи на ящик у торговца, дождись цены и потяни его</div>
+    <div id="nowAlt"></div>
+    <canvas id="nowSpec" class="spec" width="60" height="48"></canvas>
+    <div id="nowItemsWrap" hidden>
+      <div class="k">Размер ящика</div>
+      <div class="chips" id="sizeChips"></div>
+      <ul class="items" id="nowItems"></ul>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="k">Уровень звука</div>
+    <div class="meter"><div id="mFill"></div><div class="mark" id="mBg"></div><div class="mark" id="mThr"></div></div>
+    <div class="k" id="mTxt">—</div>
+    <label class="set">Чувствительность, дБ над фоном <span id="vSens"></span><input type="range" id="sSens" min="3" max="30" step="1"></label>
+    <label class="set">Тише этого не ловить, дБ <span id="vMin"></span><input type="range" id="sMin" min="-80" max="-20" step="1"></label>
+    <label class="set">Длина звука, мс <span id="vCap"></span><input type="range" id="sCap" min="250" max="1200" step="50"></label>
+    <label class="set">Порог узнавания, % <span id="vSim"></span><input type="range" id="sSim" min="60" max="95" step="1"></label>
+    <label class="chk"><input type="checkbox" id="cBeep"> Пикнуть, если в группе есть красное</label>
+    <hr style="border:0;border-top:1px solid var(--line);margin:14px 0 4px">
+    <label class="chk"><input type="checkbox" id="cRec"> Запись эталонов: каждый пойманный звук → в группу</label>
+    <div class="row" style="margin-top:6px"><select id="recG" aria-label="Группа для записи"></select></div>
+    <label class="chk"><input type="checkbox" id="cAdv"> После записи переходить к следующей группе</label>
+  </section>
+</div></div>
+
+<div class="band" style="padding-top:0"><div class="wrap">
+  <div class="row" style="justify-content:space-between"><h2>Пойманные звуки</h2><button class="sm" id="bClr">Очистить</button></div>
+  <div id="recent"><div class="empty">Пока пусто. Каждый пойманный звук появится здесь — его можно сохранить как эталон нужной группы.</div></div>
+</div></div>
+
+<div class="band" style="padding-top:0"><div class="wrap">
+  <div class="row" style="justify-content:space-between;margin-bottom:8px">
+    <h2 style="margin:0">Каталог: 38 звуковых групп</h2>
+    <div class="row"><span class="k" id="catStat"></span><button class="sm" id="bExp">Экспорт эталонов</button><label class="btn sm" style="display:inline-flex;align-items:center;min-height:30px;font-size:13px">Импорт<input type="file" id="fImp" class="impFile" accept=".json,application/json" hidden></label></div>
+  </div>
+  <p class="lead">Красная полоса — в группе бывают мифические (красные) предметы. Звуки «взять» и «положить» для каждой группы берутся из файла со звуками. Свои записи из рейда добавляются к ним и повышают точность. Состав групп и цены взяты с abihelper.ru/sounds в ноябре 2026 и могут устареть после патча.</p>
+  <div class="cat" id="cat"></div>
+</div></div>
+
+<div class="band"><div class="wrap panel">
+  <details class="help" open>
+    <summary>Как пользоваться</summary>
+    <ol>
+      <li>Открой эту страницу в Chrome или Edge на том же ПК, где запущена игра. Firefox не подойдёт. Чтобы запускать как программу, нажми значок «Установить» справа в адресной строке.</li>
+      <li>«Слушать игру» → выбери <b>окно игры</b> и включи передачу звука. Если у окна нет галочки звука — выбери «Весь экран» и «Поделиться системным звуком» (тогда в звук попадут Discord и музыка, будут лишние срабатывания).</li>
+      <li>Отключи «улучшайзеры» звука: Sonar, Nahimic, Dolby Atmos, Windows Sonic, эквалайзеры — они меняют звук и ломают сравнение.</li>
+      <li>Один раз загрузи файл со звуками <code>abi-uho-zvuki.json</code> (кнопка «Импорт» в каталоге или жёлтая плашка сверху). Записывать самому ничего не нужно. Если какой-то ящик узнаётся плохо, добавь свою запись: в ленте «Пойманные звуки» выбери правильную группу и нажми «В эталон».</li>
+      <li>В рейде у торговца тяни ящики по одному, без двойных кликов. На экране «Последний звук» — группа, предметы и есть ли среди них красные. Кнопки размера приглушают предметы другого размера.</li>
+      <li>Режим «Запись эталонов» нужен, только если после патча звуки поменяются: выбери группу, дёрни такой ящик — запись сохранится.</li>
+      <li>Свои записи хранятся в этом браузере. «Экспорт эталонов» → кинь файл друзьям, они делают «Импорт».</li>
+    </ol>
+  </details>
+</div></div>
+
+<script>
+{
+/* ===== Данные: звуковые группы (abihelper.ru/sounds) ===== */
+const RAW=[
+["Средний композит","Med_Comp","Киноплёнка|2x2|L|61144;Керосиновая лампа|1x2|E|12295;Масло|1x2|E|6089"],
+["Большая металлическая ёмкость","Container_Big_Metal","Топливный бак|2x3|L|75542;Высокоэнергетическое топливо|2x2|L|62210;Пропановый баллон|2x2|E|12360;Переносная топливная канистра|1x2|E|11885;Бочка для топлива|2x2|E|6507"],
+["Ткань, средняя","Med_Fabric","Заряд крупнокалиберного артиллерийского пороха|3x2|L|192534;Нитроцеллюлоза|2x2|E|11541;Паракорд|2x2|E|6622;Походный тент|2x1|R|1776"],
+["Топливо","Fuel","Ударопрочная твёрдая резина|2x2|E|12467"],
+["Бетон","Concrete","Мешок цемента|2x2|E|6546"],
+["Звонкий металл, средний","Med_Metal_Crisp","Золотая табличка «Судьба»|3x2|M|1397806;Автомобильный аккумулятор|3x2|L|77340;Пластина из титанового сплава|2x3|L|76141"],
+["Пластик, крупный","Plastic_Large","Резиновая прокладка|2x2|R|1957"],
+["Дерево, среднее","Med_Wood","Старинная пишущая машинка|2x2|L|301920;Проигрыватель пластинок|2x2|L|297480;Акустическая панель|2x2|R|1977;Деревянная доска|2x1|R|1634"],
+["Мелкий композит","Small_Comp","Звукоизоляционная вата|3x2|L|76741;Слуховой аппарат|1x1|E|11082;Переносная рация|1x2|E|6317;Бинокль-дальномер|2x1|E|6279;Объектив|1x1|E|5936;Биопрепарат|1x1|E|5746;Оружейные детали|2x1|R|1877;Мощный фонарь|2x1|R|1715;Аварийный молоток|1x1|R|1372;Инъекция глюкозы|1x1|R|795;Дезинфицирующее средство|1x1|C|503"],
+["Электроника","ElectronicDevice","Модуль целеуказания|2x2|M|1498500;Тепловизионный модуль|2x1|M|1332000;Векторный процессор|3x2|L|193652;Источник бесперебойного питания|3x2|L|191808;Ноутбук|2x2|L|189144;Видеокамера|2x2|L|186480;Модуль лазерного целеуказателя|2x2|L|183816;Автоматический наружный дефибриллятор|2x2|L|173160;Палладиевая проволока|2x2|L|170496;Нивелир|2x1|L|167832;Антенна|2x2|L|62343;Игровая приставка|1x2|L|53946;Золотой телефон|1x1|L|50949;Инсулиновая помпа|1x1|L|47952;Радио|2x1|E|12148;Осциллограф|2x1|E|11934;Фотоаппарат|1x1|E|11295;Стабилизатор|1x1|E|11188;Кабель передачи данных|2x1|E|6355;Прибор для проверки герметичности|2x1|E|6241;Газоанализатор|1x2|E|6203;Экспонометр|1x1|E|5898;Термометр|1x1|E|5708;Игровой картридж|1x1|E|5556;Оперативная память|1x1|E|5442;Микропроцессор|1x1|E|5404;DVD-диск|2x1|R|1937;Глушитель сигнала|1x2|R|1917;Радиоприёмник|1x2|R|1897;Дисковод|2x1|R|1675;Волновой фильтр|1x1|R|1453;Кабель VGA|2x1|R|888;Фонарик|2x1|C|551"],
+["Пластик, мелкий","Plastic_Small","Кабель питания|2x1|R|878"],
+["Техника, мелкая","Tech_Small","Видеокарта|2x1|L|75548;Блок питания|2x2|E|12574;SSD-накопитель|1x1|E|10762"],
+["Комплектующие ПК","PC","Рабочий ЖК-дисплей|2x1|E|11402;Сломанный ЖК-дисплей|2x1|R|1655"],
+["Дерево, крупное","Big_Wood","Двухгрифовая лютня|2x3|M|1544333;Студийный монитор|2x2|L|61295"],
+["Батарейки","Battery_Small","Батарейка типа D|1x1|C|431;Батарейка|1x1|C|253"],
+["Композит (аксессуар)","Acc_Med_Comp","Солнечная панель|1x1|E|10975"],
+["Глухой металл, средний","Med_Metal_Blunt","Гидравлический расширитель|2x3|L|194472;Модуль положительного электрода аккумулятора|3x2|L|192115;Изогнутый гофрированный стальной лист|2x2|L|182893;Походная плита|2x2|E|13000;Портативный осветитель|1x2|E|11615;Переносной домкрат|2x1|E|11508;Маслёнка|2x1|E|6165;Набор для чистки труб|1x2|E|6127;Клеевой пистолет|2x1|R|906"],
+["Глухой металл, мелкий","Small_Metal_Blunt","Капсульный телевизор|2x3|M|1629947;Зеркало синхронизированной решётки Skyhook|1x2|M|1532375;Складной ноутбук MRID|2x2|M|1512222;Прототип вычислительного модуля|2x2|M|1509600;Прототип трёхосевого гироконтроллера|3x2|M|1397385;Янтарное сердце небес|2x3|M|1395613;Игрушечный робот Quantum 2000|2x3|M|1394769;Небесная сфера|2x2|M|1368615;Лира|2x2|M|1366000;Яйцо Хефра|2x2|M|1363385;Необработанная алмазная руда|1x2|L|498375;Модель спутника «Сергей-1»|2x1|L|469248;Фарфор|2x2|L|293040;Золотой слиток|2x1|L|270840;Инфракрасная терапевтическая лампа|2x2|L|122544;Гидравлический ключ|2x1|L|52147;Никель-кадмиевый аккумулятор|1x1|L|40266;Портативный солемер|1x1|L|39644;Солнечное зарядное устройство|1x1|L|39022;Гидравлические ножницы для арматуры|3x2|E|13106;Воздуходувка|2x2|E|12893;Набор инструментов|2x2|E|12787;Электродрель|2x2|E|12680;Карманный калькулятор|1x2|E|12104;Артиллерийский снаряд|1x2|E|12041;Портативный приёмник|1x2|E|12022;Серебряный значок|1x1|R|7064;Шпора|2x1|R|4764;Трубный ключ|2x1|R|897"],
+["Мелкая металлическая ёмкость","Container_Small_Metal","Ящик для инструментов|2x1|R|1695"],
+["Крупный глухой","Big_Blunt","Паяльная лампа|1x2|L|72460"],
+["Дерево, мелкое","Small_Wood","Фоторамка|2x1|R|934"],
+["Звонкий металл, мелкий","Small_Metal_Crisp","Копия древней золотой маски|2x3|M|1647474;«Рассвет»|3x2|M|1642800;Музыкальная шкатулка «Золотая клетка»|2x3|M|1620600;Аэрокосмический навигатор|3x2|M|1598400;Часы Фаэтона|2x2|M|1531800;Электроэнцефалограф|2x2|M|1524789;Реальная матрица|2x2|M|1507263;Павлиний веер|2x2|M|1371231;Золотая пластинка «Голос цивилизации»|2x2|M|1369290;Золотая ручка|1x1|L|458373;Нефритовый браслет|1x1|L|456619;Игровой набор «Космическая лаборатория»|3x2|L|191387;Металлическое сердце|2x2|L|185077;Фрагменты чертежа «Гунгнир»|2x2|L|183453;Золотые часы|1x1|L|80919;Индивидуальное устройство связи T-147|1x2|L|53724;Дневник Восса|1x2|L|53446;Набор для измерения глюкозы|2x1|L|53280;Карта доступа Toland|1x1|L|42755;Магниевое огниво|1x1|L|41511;Военный набор инструментов|2x1|E|12227;Портативный тестер|1x2|E|12165;Измеритель ёмкости|1x2|E|12161;Карманный цифровой помощник|1x2|E|12090;Электронный стетоскоп|1x2|E|11954;Портативный диктофон GU-470|1x2|E|6327;Комикс «Космический мальчик»|1x2|E|6307;Часы|1x1|E|5632;Медицинские ножницы|1x1|C|495"],
+["Ткань, мелкая","Small_Fabric","Мешок удобрения|2x2|E|6584"],
+["Стекло, мелкое","Small_Glass","Набор для анализа феромонов|3x2|L|259296;Роскошный чайный сервиз|2x2|L|63124;Инъектор блокатора|1x1|L|42133"],
+["Дерево с механизмом","Med_Wood_Clock","Лютня|2x2|E|11464"],
+["Стекло","Glass","Очки в золотой оправе|2x1|E|29570;Шприц|1x1|R|804"],
+["Пакет","Food_Bag","Медицинская губка|1x1|C|289"],
+["Статуэтка","Statue","Золотая статуэтка льва|3x2|M|1540125;Золотая статуэтка гепарда|2x1|L|87912"],
+["Монеты","Coin","Золотой браслет|1x1|L|81918;Памятная монета|1x1|E|14462"],
+["Стекло, среднее","Med_Glass","Янтарный напиток «Северные звёзды»|2x2|M|1548111;Ваза|2x2|M|1373625;Образец сердца мутанта|2x3|L|257520"],
+["Часы","Clock","Настольные часы|1x2|E|29304"],
+["Чайник","Teapot","Старинный чайник|2x2|M|1415250"],
+["Цепочка","GoldChain","Ожерелье с драгоценными камнями|2x2|M|1456875;Кулон «Звезда Камоны»|2x2|M|1386839;Брошь|1x1|L|83916;Бриллиантовое кольцо|1x1|L|82917;Карманные часы|1x1|E|14652;Серебряная цепочка|1x1|E|14557"],
+["Бумага, средняя","Med_Paper","Альбом с марками|2x2|L|92907"],
+["Бумага, мелкая","Small_Paper","Зарисовка эволюции мутантов|2x2|L|243312;Закладка из сухоцветов|1x1|L|40888;Почтовая марка|1x1|R|7165;Документ|2x1|R|1836"],
+["Статуя, средняя","Med_Statue","Величественная скульптура|2x3|M|1581750;Золотая змея|2x2|M|1429080;Оптоэлектронная модель гиперпространства|2x2|M|1371484;Золотой кубок|1x2|L|275280;Золотой куб|1x1|L|266400;Шифровальная машина K7-L|2x2|L|185269;Мутировавшая ткань|1x1|L|43377;Гипсовая скульптура|2x3|E|33034;Армейская фляга|2x1|R|980"],
+["Бумага, крупная","Big_Paper","Папка|2x1|L|53346;Пачка рисовой бумаги|1x2|E|12219;Книга в твёрдом переплёте|1x2|R|962"],
+["Радио","Radio","Военная радиостанция|2x2|L|62943;Классическое радио|2x1|R|989"]
+];
+const normSize=s=>{const [a,b]=s.split('x').map(Number);return Math.min(a,b)+'×'+Math.max(a,b)};
+const GROUPS=RAW.map((r,i)=>{const items=r[2].split(';').map(x=>{const [n,s,t,p]=x.split('|');return{n,s:s.replace('x','×'),ns:normSize(s),t,p:+p}});return{g:i+1,d:r[0],file:r[1],items,red:items.filter(x=>x.t==='M').length}});
+const TIER={M:'Мифический',L:'Легендарный',E:'Эпический',R:'Редкий',C:'Обычный'};
+
+/*DSP*/
+const NMEL=48,PRE_MS=100,LO_HZ=600,HP_HZ=700,FLOOR=3,SUB=2,W_MEAN=0.15;
+const melCache={},hannCache={};
+function fft(re,im){const n=re.length;for(let i=1,j=0;i<n;i++){let bit=n>>1;for(;j&bit;bit>>=1)j^=bit;j^=bit;if(i<j){let t=re[i];re[i]=re[j];re[j]=t;t=im[i];im[i]=im[j];im[j]=t}}
+ for(let len=2;len<=n;len<<=1){const ang=-2*Math.PI/len,wr=Math.cos(ang),wi=Math.sin(ang),h=len>>1;for(let i=0;i<n;i+=len){let cr=1,ci=0;for(let k=0;k<h;k++){const a=i+k,b=a+h;const tr=re[b]*cr-im[b]*ci,ti=re[b]*ci+im[b]*cr;re[b]=re[a]-tr;im[b]=im[a]-ti;re[a]+=tr;im[a]+=ti;const nr=cr*wr-ci*wi;ci=cr*wi+ci*wr;cr=nr}}}}
+function hann(n){if(!hannCache[n]){const w=new Float64Array(n);for(let i=0;i<n;i++)w[i]=0.5-0.5*Math.cos(2*Math.PI*i/(n-1));hannCache[n]=w}return hannCache[n]}
+function melBank(sr,nfft){const key=sr+'_'+nfft;if(melCache[key])return melCache[key];
+ const h2m=f=>2595*Math.log10(1+f/700),m2h=m=>700*(10**(m/2595)-1);
+ const lo=h2m(LO_HZ),hi=h2m(Math.min(16000,sr/2-100));const pts=[];
+ for(let i=0;i<NMEL+2;i++)pts.push(m2h(lo+(hi-lo)*i/(NMEL+1))*nfft/sr);
+ const bank=[];for(let m=0;m<NMEL;m++){const a=pts[m],b=pts[m+1],c=pts[m+2];const w=[];
+  for(let k=Math.max(1,Math.floor(a));k<=Math.min(nfft/2,Math.ceil(c));k++){const v=k<b?(k-a)/(b-a):(c-k)/(c-b);if(v>0)w.push(k,v)}
+  if(!w.length)w.push(Math.min(nfft/2,Math.max(1,Math.round(b))),1);bank.push(w)}
+ melCache[key]=bank;return bank}
+// Сегмент начинается за PRE_MS до звука: эти кадры дают оценку фонового шума, который вычитается
+function features(x,sr){
+ const hop=Math.round(sr/93.75);let nfft=1024;while(nfft<sr*0.04)nfft<<=1;
+ const win=hann(nfft),bank=melBank(sr,nfft),re=new Float64Array(nfft),im=new Float64Array(nfft),P=[];
+ for(let t=0;t+nfft<=x.length;t+=hop){for(let i=0;i<nfft;i++){re[i]=x[t+i]*win[i];im[i]=0}fft(re,im);
+  const row=new Float64Array(NMEL);for(let m=0;m<NMEL;m++){const w=bank[m];let e=0;for(let j=0;j<w.length;j+=2){const k=w[j];e+=(re[k]*re[k]+im[k]*im[k])*w[j+1]}row[m]=e}P.push(row)}
+ const preN=Math.round(PRE_MS/1000*sr),nPre=Math.max(0,Math.floor((preN-nfft)/hop)+1);
+ const noise=new Float64Array(NMEL);for(let t=0;t<nPre&&t<P.length;t++)for(let m=0;m<NMEL;m++)noise[m]+=P[t][m]/nPre;
+ const M=[];for(let t=nPre;t<P.length;t++){const r=new Float32Array(NMEL);for(let m=0;m<NMEL;m++)r[m]=Math.log10(Math.max(P[t][m]-SUB*noise[m],0.02*noise[m])+1e-12);M.push(r)}
+ const T=M.length;if(!T)return{T:0,M:[],mean:new Float32Array(NMEL)};
+ let mx=-1e9;for(const r of M)for(const v of r)if(v>mx)mx=v;const fl=mx-FLOOR;
+ for(const r of M){let s=0;for(let m=0;m<NMEL;m++){if(r[m]<fl)r[m]=fl;s+=r[m]}s/=NMEL;for(let m=0;m<NMEL;m++)r[m]-=s}
+ let s=0,ss=0;for(const r of M)for(let m=0;m<NMEL;m++){s+=r[m];ss+=r[m]*r[m]}
+ const N=T*NMEL,mu=s/N,sd=Math.sqrt(Math.max(1e-9,ss/N-mu*mu));
+ const mean=new Float32Array(NMEL);for(const r of M)for(let m=0;m<NMEL;m++){r[m]=(r[m]-mu)/sd;mean[m]+=r[m]/T}
+ return{T,M,mean}}
+function pear(A,B,i0,j0,n){let sa=0,sb=0,saa=0,sbb=0,sab=0;for(let t=0;t<n;t++){const a=A[i0+t],b=B[j0+t];for(let m=0;m<NMEL;m++){const x=a[m],y=b[m];sa+=x;sb+=y;saa+=x*x;sbb+=y*y;sab+=x*y}}
+ const c=n*NMEL,cov=sab-sa*sb/c,va=saa-sa*sa/c,vb=sbb-sb*sb/c;return va>1e-9&&vb>1e-9?cov/Math.sqrt(va*vb):0}
+function vpear(a,b){let sa=0,sb=0,saa=0,sbb=0,sab=0;const n=a.length;for(let i=0;i<n;i++){sa+=a[i];sb+=b[i];saa+=a[i]*a[i];sbb+=b[i]*b[i];sab+=a[i]*b[i]}
+ const cov=sab-sa*sb/n,va=saa-sa*sa/n,vb=sbb-sb*sb/n;return va>1e-9&&vb>1e-9?cov/Math.sqrt(va*vb):0}
+function sim(A,B){if(!A.T||!B.T)return 0;const minT=Math.min(A.T,B.T);let best=-1;
+ for(let s=-8;s<=8;s++){const i0=Math.max(0,s),j0=Math.max(0,-s),n=Math.min(A.T-i0,B.T-j0);if(n<minT*0.6||n<3)continue;const p=pear(A.M,B.M,i0,j0,n);if(p>best)best=p}
+ return (1-W_MEAN)*best+W_MEAN*vpear(A.mean,B.mean)}
+// Детектор: ловит всплеск над фоном (по сигналу без низкого гула) и вырезает кусок с запасом PRE_MS до начала
+class Detector{
+ constructor(sr,getSet,onSeg){this.sr=sr;this.ring=new Float32Array(Math.ceil(sr*4));this.total=0;this.bg=-80;this.last=-1e12;this.pend=null;this.onSeg=onSeg;this.getSet=getSet;this.level=-100;this.mute=0;this.hpA=Math.exp(-2*Math.PI*HP_HZ/sr);this.hs=[0,0,0,0];this.hist=[]}
+ feed(x){const R=this.ring,L=R.length,set=this.getSet(),a=this.hpA,H=this.hs,hb=new Float32Array(x.length);let s=0;
+  for(let i=0;i<x.length;i++){const v=x[i];H[0]=a*(H[0]+v-H[1]);H[1]=v;const w=H[0];H[2]=a*(H[2]+w-H[3]);H[3]=w;hb[i]=H[2];s+=H[2]*H[2];R[(this.total+i)%L]=v}
+  const start=this.total;this.total+=x.length;const db=10*Math.log10(s/x.length+1e-12);this.level=db;
+  const capN=Math.round(set.capMs/1000*this.sr),preN=Math.round(PRE_MS/1000*this.sr);
+  // фон = 20-й перцентиль уровня за последние ~2 с (короткие звуки его не поднимают)
+  const hs=this.hist;hs.push(db);if(hs.length>Math.round(2*this.sr/x.length))hs.shift();const so=[...hs].sort((p,q)=>p-q);this.bg=so[Math.floor(so.length*0.2)];
+  if(this.pend){if(this.total>=this.pend.end){const p=this.pend;this.pend=null;const seg=new Float32Array(p.end-p.start);for(let i=0;i<seg.length;i++)seg[i]=R[(p.start+i)%L];this.onSeg(seg,this.sr)}return}
+  if(start<this.sr*0.5)return;
+  const thr=Math.max(this.bg+set.sens,set.minDb);
+  if(db>thr&&start-this.last>capN+0.15*this.sr&&start>=this.mute){
+   let on=start;for(let j=0;j<x.length;j+=128){let e=0;const k=Math.min(j+128,x.length);for(let i=j;i<k;i++)e+=hb[i]*hb[i];if(10*Math.log10(e/(k-j)+1e-12)>thr){on=start+j;break}}
+   this.last=on;this.pend={start:Math.max(0,on-preN),end:on+capN}}}
+}
+/*/DSP*/
+
+/* ===== Состояние ===== */
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt=n=>n.toLocaleString('ru-RU').replace(/ /g,' ')+' ₭';
+const DEF={sens:6,minDb:-60,capMs:600,minSim:78,beep:true,rec:false,recG:1,adv:true};
+let set={...DEF};try{Object.assign(set,JSON.parse(localStorage.getItem('abiuho-set2')||'{}'))}catch(e){}
+set.rec=false;
+const saveSet=()=>{try{localStorage.setItem('abiuho-set2',JSON.stringify(set))}catch(e){}};
+const S={ctx:null,stream:null,proc:null,src:null,det:null,pctx:null};
+let CAT=[];let RECENT=[];let sizeF='';let lastNow=null;
+
+/* ===== Хранилище ===== */
+let db=null;
+function openDB(){return new Promise(res=>{try{const r=indexedDB.open('abi-uho2',2);r.onupgradeneeded=()=>{const d=r.result;if(!d.objectStoreNames.contains('cat'))d.createObjectStore('cat',{keyPath:'id'});if(!d.objectStoreNames.contains('pack'))d.createObjectStore('pack')};r.onsuccess=()=>{db=r.result;res()};r.onerror=()=>res()}catch(e){res()}})}
+function dbPut(e){if(!db)return;try{db.transaction('cat','readwrite').objectStore('cat').put({id:e.id,g:e.g,sr:e.sr,pcm:e.pcm.buffer,created:e.created})}catch(_){}}
+function dbDel(id){if(!db)return;try{db.transaction('cat','readwrite').objectStore('cat').delete(id)}catch(_){}}
+function packGet(){return new Promise(res=>{if(!db)return res(null);try{const r=db.transaction('pack').objectStore('pack').get('sounds');r.onsuccess=()=>res(r.result||null);r.onerror=()=>res(null)}catch(e){res(null)}})}
+function packPut(v){if(!db)return;try{db.transaction('pack','readwrite').objectStore('pack').put(v,'sounds')}catch(_){}}
+function dbAll(){return new Promise(res=>{if(!db)return res([]);try{const r=db.transaction('cat').objectStore('cat').getAll();r.onsuccess=()=>res(r.result||[]);r.onerror=()=>res([])}catch(e){res([])}})}
+const toI16=f=>{const o=new Int16Array(f.length);for(let i=0;i<f.length;i++)o[i]=Math.max(-1,Math.min(1,f[i]))*32767;return o};
+const toF32=a=>{const o=new Float32Array(a.length);for(let i=0;i<a.length;i++)o[i]=a[i]/32767;return o};
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+function addRef(g,f32,sr,id,created){const pcm=toI16(f32);const e={id:id||uid(),g,sr,pcm,created:created||Date.now(),feat:features(f32,sr)};CAT.push(e);return e}
+
+/* ===== Распознавание ===== */
+function match(feat){const best={};for(const e of CAT){const s=sim(feat,e.feat);if(!best[e.g]||s>best[e.g].s)best[e.g]={g:e.g,s}}return Object.values(best).sort((a,b)=>b.s-a.s)}
+const pct=s=>Math.round(Math.max(0,s)*100);const MAYBE=0.6;
+
+function drawSpec(cv,feat){const T=feat.T;if(!T)return;cv.width=T;cv.height=NMEL;const c=cv.getContext('2d'),img=c.createImageData(T,NMEL);
+ for(let t=0;t<T;t++)for(let m=0;m<NMEL;m++){const v=Math.max(0,Math.min(1,(feat.M[t][m]+1.5)/4));const o=((NMEL-1-m)*T+t)*4;
+  img.data[o]=20+v*235;img.data[o+1]=22+v*(v>.7?150:190);img.data[o+2]=18+v*(v>.7?60:110);img.data[o+3]=255}
+ c.putImageData(img,0,0)}
+
+function showNow(it){lastNow=it;const card=$('now');card.classList.remove('red','hit');const m=it.matches,top=m[0],th=set.minSim/100;
+ $('nowAlt').textContent=(top&&top.s>=MAYBE?'Другие варианты: ':'')+m.slice(top&&top.s>=MAYBE?1:0,4).map(x=>'№'+x.g+' '+pct(x.s)+'%').join(' · ');
+ drawSpec($('nowSpec'),it.feat);
+ if(!CAT.length){$('nowLabel').textContent='Звук пойман';$('nowSub').textContent='Каталог эталонов пуст — сохрани этот звук в нужную группу ниже';$('nowItemsWrap').hidden=true;return}
+ if(!top||top.s<MAYBE){$('nowLabel').textContent='Не узнал';$('nowSub').textContent=top?'Ближе всего №'+top.g+' ('+pct(top.s)+'%) — скорее всего, это не звук ящика':'';$('nowItemsWrap').hidden=true;return}
+ const G=GROUPS[top.g-1],sure=top.s>=th;card.classList.add(G.red&&sure?'red':'hit');
+ $('nowLabel').innerHTML=(sure?'':'Похоже на ')+'№'+G.g+' · '+esc(G.d)+(G.red?'<span class="redtag">КРАСНОЕ: '+G.red+' из '+G.items.length+'</span>':'');
+ $('nowSub').textContent=(sure?'Совпадение ':'Не уверен, совпадение ')+pct(top.s)+'%'+(G.red?' — в этой группе бывают мифические предметы':' — красных в группе нет');
+ renderItems(G);$('nowItemsWrap').hidden=false}
+function renderItems(G){const sizes=[...new Set(G.items.map(x=>x.ns))].sort();
+ $('sizeChips').innerHTML=['', ...sizes].map(s=>`<button data-s="${s}" class="${s===sizeF?'act':''}">${s||'Все'}</button>`).join('');
+ const its=[...G.items].sort((a,b)=>b.p-a.p);
+ $('nowItems').innerHTML=its.map(x=>`<li class="${x.t}${sizeF&&x.ns!==sizeF?' dim':''}"><span class="dot t-${x.t}" title="${TIER[x.t]}"></span><span class="nm">${esc(x.n)}</span><span class="num">${x.s}</span><span class="num">${fmt(x.p)}</span></li>`).join('')}
+$('sizeChips').addEventListener('click',e=>{const b=e.target.closest('button');if(!b||!lastNow)return;sizeF=b.dataset.s;const top=lastNow.matches[0];if(top)renderItems(GROUPS[top.g-1])});
+
+/* ===== Лента пойманных звуков ===== */
+const groupOpts=sel=>GROUPS.map(G=>`<option value="${G.g}"${G.g===sel?' selected':''}>№${G.g} ${esc(G.d)}${G.red?' ●':''}</option>`).join('');
+function itemTitle(it){const top=it.matches[0];if(!CAT.length)return'<b>Новый звук</b>';if(!top)return'<b>Не узнал</b>';const G=GROUPS[top.g-1];const ok=top.s>=set.minSim/100,may=top.s>=MAYBE;
+ return`<b class="${may&&G.red?'redtxt':''}">${ok?'':may?'похоже: ':'? '}№${G.g} ${esc(G.d)}</b> · ${pct(top.s)}%${may&&G.red?' · есть красное':''}`}
+function makeNode(it){const d=document.createElement('div');d.className='snd';d.dataset.id=it.id;
+ const t=new Date(it.t).toLocaleTimeString('ru-RU');const top=it.matches[0];
+ d.innerHTML=`<canvas class="spec"></canvas><div><div class="ttl">${itemTitle(it)}</div><div class="meta">${t} · ${esc(it.src)}</div></div>
+ <div class="act"><button class="sm" data-a="play">▶</button><select aria-label="Группа">${groupOpts(top?top.g:set.recG)}</select><button class="sm" data-a="save">В эталон</button><button class="sm" data-a="del" aria-label="Убрать">✕</button></div>`;
+ drawSpec(d.querySelector('canvas'),it.feat);it.node=d;return d}
+function refreshTitles(){for(const it of RECENT){it.matches=match(it.feat);const el=it.node&&it.node.querySelector('.ttl');if(el)el.innerHTML=itemTitle(it)}}
+function addRecent(seg,sr,src){const feat=features(seg,sr);if(feat.T<4)return null;
+ const it={id:uid(),seg,sr,feat,src,t:Date.now(),matches:match(feat)};RECENT.unshift(it);
+ const box=$('recent');if(RECENT.length===1)box.innerHTML='';box.prepend(makeNode(it));
+ while(RECENT.length>40){const o=RECENT.pop();o.node&&o.node.remove()}return it}
+$('recent').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;const row=b.closest('.snd');const it=RECENT.find(x=>x.id===row.dataset.id);if(!it)return;
+ if(b.dataset.a==='play')play(it.seg,it.sr);
+ if(b.dataset.a==='del'){RECENT=RECENT.filter(x=>x!==it);row.remove()}
+ if(b.dataset.a==='save'){const g=+row.querySelector('select').value;const e2=addRef(g,it.seg,it.sr);dbPut(e2);b.textContent='Сохранено';b.disabled=true;renderCat();refreshTitles()}});
+$('bClr').onclick=()=>{RECENT=[];$('recent').innerHTML='<div class="empty">Пусто.</div>'};
+
+/* ===== Каталог ===== */
+function renderCat(){const by={};for(const e of CAT)(by[e.g]=by[e.g]||[]).push(e);
+ const filled=Object.keys(by).length,own=CAT.filter(e=>!e.builtin).length;$('catStat').textContent=`звуков из игры: ${CAT.length-own}, своих записей: ${own}, групп узнаётся: ${filled}/38`;
+ $('cat').innerHTML=GROUPS.map(G=>{const refs=by[G.g]||[];return`<div class="gcard${G.red?' hasred':''}${refs.length?'':' norefs'}"><h3>№${G.g} · ${esc(G.d)}</h3>
+  <div class="k">${G.items.length} предм.${G.red?` · <b style="color:var(--red)">красных: ${G.red}</b>`:''} · <code>${esc(G.file)}</code></div>
+  <div class="refs">${refs.map(r=>r.builtin?`<button class="sm" data-play="${r.id}">▶ ${r.kind}</button>`:`<button class="sm" data-play="${r.id}">▶ своя</button><button class="sm" data-del="${r.id}" aria-label="Удалить запись">✕</button>`).join('')||'<span class="k">нет эталона</span>'}</div>
+  <details><summary>Предметы</summary><ul class="items">${[...G.items].sort((a,b)=>b.p-a.p).map(x=>`<li class="${x.t}"><span class="dot t-${x.t}"></span><span class="nm">${esc(x.n)}</span><span class="num">${x.s}</span><span class="num">${fmt(x.p)}</span></li>`).join('')}</ul></details></div>`}).join('')}
+$('cat').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;
+ if(b.dataset.play){const r=CAT.find(x=>x.id===b.dataset.play);r&&play(r.seg||toF32(r.pcm),r.sr)}
+ if(b.dataset.del){CAT=CAT.filter(x=>x.id!==b.dataset.del);dbDel(b.dataset.del);renderCat();refreshTitles()}});
+
+function b64(u8){let s='';for(let i=0;i<u8.length;i+=0x8000)s+=String.fromCharCode.apply(null,u8.subarray(i,i+0x8000));return btoa(s)}
+function unb64(s){const b=atob(s),u=new Uint8Array(b.length);for(let i=0;i<b.length;i++)u[i]=b.charCodeAt(i);return u}
+$('bExp').onclick=()=>{const data={app:'abi-uho',v:1,items:CAT.filter(e=>!e.builtin).map(e=>({id:e.id,g:e.g,sr:e.sr,created:e.created,pcm:b64(new Uint8Array(e.pcm.buffer))}))};
+ const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(data)],{type:'application/json'}));a.download='abi-uho-etalony.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),5000)};
+async function importFile(e){const f=e.target.files[0];e.target.value='';if(!f)return;try{const d=JSON.parse(await f.text());
+ if(d&&d.app==='abi-uho-sounds'&&Array.isArray(d.sounds)){
+  const ok=d.sounds.filter(s=>Array.isArray(s)&&Number.isInteger(s[0])&&s[0]>=1&&s[0]<=38&&typeof s[1]==='string'&&typeof s[2]==='string').map(s=>[s[0],s[1].slice(0,80),s[2]]);
+  if(!ok.length)throw new Error('в файле нет звуков');
+  PACK=ok;packPut({sounds:ok,at:Date.now()});builtinSr=0;status('Загружаю звуки…');await loadBuiltins(S.ctx?S.ctx.sampleRate:48000);
+  const n=CAT.filter(x=>x.builtin).length;status(n?'Звуки загружены: '+n+'. Можно слушать игру':'Не удалось разобрать звуки из файла',!!n);return}
+ let n=0;for(const r of (d&&d.items)||[]){if(CAT.some(x=>x.id===r.id)||!(r.g>=1&&r.g<=38))continue;const pcm=new Int16Array(unb64(r.pcm).buffer);const e2=addRef(+r.g,toF32(pcm),+r.sr,String(r.id),r.created);dbPut(e2);n++}
+ status('Импортировано своих записей: '+n);renderCat();refreshTitles()}catch(err){status('Не удалось прочитать файл: '+err.message)}}
+document.querySelectorAll('.impFile').forEach(el=>el.addEventListener('change',importFile));
+
+/* ===== Звук ===== */
+function status(t,on){const s=$('status');s.textContent=t;s.classList.toggle('on',!!on)}
+function play(f32,sr){const c=S.ctx||(S.pctx||(S.pctx=new AudioContext()));try{c.resume()}catch(e){}const b=c.createBuffer(1,f32.length,sr);b.copyToChannel(f32,0);const s=c.createBufferSource();s.buffer=b;s.connect(c.destination);s.start();
+ if(S.det&&c===S.ctx)S.det.mute=S.det.total+Math.round((f32.length/sr+0.5)*S.det.sr)}
+function beep(){if(!S.ctx||!set.beep)return;const c=S.ctx,t=c.currentTime;for(let k=0;k<2;k++){const o=c.createOscillator(),g=c.createGain();o.frequency.value=1046;const t0=t+k*0.2;g.gain.setValueAtTime(0.0001,t0);g.gain.exponentialRampToValueAtTime(0.25,t0+0.01);g.gain.exponentialRampToValueAtTime(0.0001,t0+0.15);o.connect(g).connect(c.destination);o.start(t0);o.stop(t0+0.16)}
+ if(S.det)S.det.mute=S.det.total+Math.round(0.8*S.det.sr)}
+function onLive(seg,sr){const it=addRecent(seg,sr,'игра');if(!it)return;
+ if(set.rec){const e2=addRef(set.recG,seg,sr);dbPut(e2);it.node.querySelector('[data-a=save]').textContent='Сохранено';it.node.querySelector('select').value=set.recG;
+  status('Эталон записан в №'+set.recG,true);if(set.adv&&set.recG<38){set.recG++;$('recG').value=set.recG;saveSet()}renderCat();refreshTitles()}
+ showNow(it);const top=it.matches[0];
+ if(top&&top.s>=set.minSim/100&&GROUPS[top.g-1].red){beep();document.title='● Красное? — Ухо торговца';setTimeout(()=>document.title='Ухо торговца — ABI',4000)}}
+function stop(){try{S.proc&&S.proc.disconnect()}catch(e){}try{S.src&&S.src.disconnect()}catch(e){}if(S.stream)S.stream.getTracks().forEach(t=>t.stop());if(S.ctx)S.ctx.close().catch(()=>{});
+ S.ctx=S.stream=S.proc=S.src=S.det=null;status('Не слушаю')}
+function attach(stream,label){stop();const ctx=new AudioContext();S.ctx=ctx;S.stream=stream;if(ctx.sampleRate!==builtinSr)loadBuiltins(ctx.sampleRate);
+ S.det=new Detector(ctx.sampleRate,()=>set,onLive);
+ const src=ctx.createMediaStreamSource(stream),proc=ctx.createScriptProcessor(1024,2,1);
+ proc.onaudioprocess=e=>{const ib=e.inputBuffer,a=ib.getChannelData(0),b=ib.numberOfChannels>1?ib.getChannelData(1):a,m=new Float32Array(a.length);for(let i=0;i<a.length;i++)m[i]=(a[i]+b[i])*0.5;S.det&&S.det.feed(m);e.outputBuffer.getChannelData(0).fill(0)};
+ src.connect(proc);proc.connect(ctx.destination);S.src=src;S.proc=proc;
+ stream.getTracks().forEach(t=>t.addEventListener('ended',()=>{if(S.stream===stream)stop()}));status('Слушаю: '+label,true)}
+$('bDisp').onclick=async()=>{try{const st=await navigator.mediaDevices.getDisplayMedia({video:true,audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false},systemAudio:'include',selfBrowserSurface:'exclude'});
+ if(!st.getAudioTracks().length){st.getTracks().forEach(t=>t.stop());status('Звук не передан: при выборе включи передачу звука (или «Весь экран» + системный звук)');return}
+ st.getVideoTracks().forEach(t=>t.enabled=false);attach(st,'звук игры')}catch(e){status('Не получилось: '+e.message)}};
+async function fillDevices(){try{const ds=(await navigator.mediaDevices.enumerateDevices()).filter(d=>d.kind==='audioinput');const cur=$('dev').value;
+ $('dev').innerHTML='<option value="">Вход: стерео микшер / VB-Cable…</option>'+ds.map(d=>`<option value="${esc(d.deviceId)}">${esc(d.label||'Устройство '+d.deviceId.slice(0,6))}</option>`).join('');$('dev').value=cur}catch(e){}}
+$('bDev').onclick=async()=>{try{if(!$('dev').value){const t=await navigator.mediaDevices.getUserMedia({audio:true});t.getTracks().forEach(x=>x.stop());await fillDevices();status('Выбери вход в списке и нажми ещё раз');return}
+ const st=await navigator.mediaDevices.getUserMedia({audio:{deviceId:{exact:$('dev').value},echoCancellation:false,noiseSuppression:false,autoGainControl:false}});attach(st,$('dev').selectedOptions[0].textContent)}catch(e){status('Не получилось: '+e.message)}};
+$('bStop').onclick=stop;
+$('fAudio').onchange=async e=>{const files=[...e.target.files];e.target.value='';const dc=S.pctx||(S.pctx=new AudioContext());let n=0;
+ for(const f of files){try{status('Режу: '+f.name);const buf=await dc.decodeAudioData(await f.arrayBuffer());const L=buf.length,a=buf.getChannelData(0),b=buf.numberOfChannels>1?buf.getChannelData(1):a;
+  const det=new Detector(buf.sampleRate,()=>set,(seg,sr)=>{if(addRecent(seg,sr,f.name))n++});
+  for(let i=0;i<L;i+=1024){const k=Math.min(1024,L-i),m=new Float32Array(k);for(let j=0;j<k;j++)m[j]=(a[i+j]+b[i+j])*0.5;det.feed(m)}
+  const pad=new Float32Array(1024);for(let i=0;i<Math.ceil(buf.sampleRate*1.5/1024);i++)det.feed(pad)}catch(err){status('Не удалось открыть '+f.name+': '+err.message);return}}
+ if(n&&RECENT[0])showNow(RECENT[0]);status('Из файлов нарезано звуков: '+n+' — смотри ленту ниже',true)};
+
+/* ===== Настройки и шкала ===== */
+const bind=(id,key,out,f=v=>v)=>{const el=$(id);el.value=set[key];const upd=()=>{set[key]=+el.value;$(out).textContent=f(set[key]);saveSet()};el.oninput=upd;upd()};
+bind('sSens','sens','vSens');bind('sMin','minDb','vMin');bind('sCap','capMs','vCap');
+bind('sSim','minSim','vSim');$('sSim').addEventListener('change',()=>{refreshTitles();lastNow&&showNow(lastNow)});
+const chk=(id,key)=>{const el=$(id);el.checked=set[key];el.onchange=()=>{set[key]=el.checked;saveSet()}};chk('cBeep','beep');chk('cRec','rec');chk('cAdv','adv');
+$('recG').innerHTML=groupOpts(set.recG);$('recG').onchange=()=>{set.recG=+$('recG').value;saveSet()};
+const pos=db=>Math.max(0,Math.min(100,(db+90)/90*100));
+(function tick(){const d=S.det;if(d){$('mFill').style.width=pos(d.level)+'%';$('mBg').style.left=pos(d.bg)+'%';const thr=Math.max(d.bg+set.sens,set.minDb);$('mThr').style.left=pos(thr)+'%';
+ $('mTxt').textContent=`сейчас ${Math.round(d.level)} дБ · фон ${Math.round(d.bg)} · порог ${Math.round(thr)}`}else $('mTxt').textContent='—';requestAnimationFrame(tick)})();
+
+
+/* ===== Встроенные звуки ящиков ===== */
+let builtinSr=0,PACK=null;
+async function loadBuiltins(sr){$('packBanner').hidden=!!PACK;if(!PACK){renderCat();return}if(builtinSr===sr)return;builtinSr=sr;
+ const fresh=[];
+ for(const [g,name,data] of PACK){try{
+  const buf=await new OfflineAudioContext(1,1,sr).decodeAudioData(unb64(data).buffer);const L=buf.length,a=buf.getChannelData(0),b=buf.numberOfChannels>1?buf.getChannelData(1):a;
+  let pk=0;const m=new Float32Array(L);for(let i=0;i<L;i++){m[i]=(a[i]+b[i])*0.5;pk=Math.max(pk,Math.abs(m[i]))}const k=pk>0?0.5/pk:1;for(let i=0;i<L;i++)m[i]*=k;
+  let seg=null;const det=new Detector(sr,()=>set,s=>{if(!seg)seg=s});const z=new Float32Array(1024);
+  for(let i=0;i<Math.ceil(sr*0.6/1024);i++)det.feed(z);for(let i=0;i<L;i+=1024)det.feed(m.subarray(i,Math.min(L,i+1024)));for(let i=0;i<Math.ceil(sr*1.5/1024);i++)det.feed(z);
+  if(seg)fresh.push({id:'b-'+name,g,sr,seg,builtin:true,kind:/_up/i.test(name)?'взять':'положить',feat:features(seg,sr)})}catch(e){}}
+ CAT=fresh.concat(CAT.filter(e=>!e.builtin));renderCat();refreshTitles()}
+/* ===== Старт ===== */
+(async()=>{await openDB();try{const pk=await packGet();if(pk&&Array.isArray(pk.sounds))PACK=pk.sounds}catch(e){}await loadBuiltins(48000);const rows=await dbAll();for(const r of rows){try{addRef(r.g,toF32(new Int16Array(r.pcm)),r.sr,r.id,r.created)}catch(e){}}renderCat();fillDevices()})();
+}
+</script>
+<script>if('serviceWorker' in navigator&&location.protocol==='https:'){try{navigator.serviceWorker.register('sw.js')}catch(e){}}</script>
+</body>
+</html>
