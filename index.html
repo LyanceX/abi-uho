@@ -221,7 +221,7 @@ input[type=number],.form input{font:inherit;font-size:15px;color:var(--ink);back
       <li>Новый рейд на другой карте — нажми «Карта: …» и смени её. Останавливать прослушивание не нужно.</li>
       <li>Отключи «улучшайзеры» звука: Sonar, Nahimic, Dolby Atmos, Windows Sonic, эквалайзеры — они меняют звук и ломают сравнение. Фильтры NVIDIA (Alt+F3) меняют цвета и мешают определять размер — тоже выключи.</li>
       <li>Один раз загрузи файл со звуками <code>abi-uho-zvuki.json</code> (кнопка «Импорт» в каталоге или жёлтая плашка сверху). Записывать самому ничего не нужно. Если какой-то ящик узнаётся плохо, добавь свою запись: в ленте «Пойманные звуки» выбери правильную группу и нажми «В эталон».</li>
-      <li>Окно поверх игры открывается само после выбора окна игры; если браузер не дал — нажми «Окно поверх игры». Цвета: красный — красный предмет точно есть, оранжевый — возможно да (с процентом), синий — возможно нет (с процентом), зелёный — красного нет, серый — не понял. Ниже список проверенных ящиков по порядку. Игра должна быть в режиме «Окно без рамки», не «Полный экран». При первом запуске открой торговца и нажми в этом окне «Запомнить окно торговца»: дальше сайт слушает только там. Если он принял за торговца другое окно — нажми «Это не торговец».</li>
+      <li>Окно поверх игры открывается само после выбора окна игры; если браузер не дал — нажми «Окно поверх игры». До звука: ★★★ тяни первым, ★★ стоит проверить, ★ вряд ли, ✕ — красных такого размера нет; номер — очередь. После звука: чем ярче красная заливка клетки, тем выше шанс красного; тёмная клетка «нет» — красного нет, «?» — не понял. Полоска внизу клетки — какие цвета предметов вообще возможны: красный, золотой, фиолетовый, синий, белый. Ниже список проверенных ящиков по порядку. Игра должна быть в режиме «Окно без рамки», не «Полный экран». При первом запуске открой торговца и нажми в этом окне «Запомнить окно торговца»: дальше сайт слушает только там. Если он принял за торговца другое окно — нажми «Это не торговец».</li>
       <li>В рейде у торговца хватай ящик, отводи в сторону и отпускай — он вернётся на место. Сайт слышит «взял» и «положил» (оба звука объединяются для точности), определяет размер ящика по экрану и после «положил» показывает итог. Перенос кнопкой F не считается. Тяни ящики по одному, без двойных кликов. На экране «Последний звук» — группа, предметы и есть ли среди них красные. Кнопки размера приглушают предметы другого размера.</li>
       <li>Режим «Запись эталонов» нужен, только если после патча звуки поменяются: выбери группу, дёрни такой ящик — запись сохранится.</li>
       <li>Свои записи хранятся в этом браузере. «Экспорт эталонов» → кинь файл друзьям, они делают «Импорт».</li>
@@ -513,8 +513,8 @@ const LEARN_MIN=8;   // с какого числа отметок (группа 
 // вес предмета: 1 + сколько раз он выпадал (эта карта и режим — полностью, другие — четверть)
 function itemW(g,n){let w=1;for(const j of JOURNAL)if(j.g===g&&j.n===n)w+=j.map===set.map&&j.mode===set.mode?1:0.25;return w}
 // lb — подпись ящика: предметы её пула весят 1, остальные POOL_W (если в списке вообще есть предметы этого пула)
-function listChance(g,list,lb){if(!list.length)return{p:0,learn:0,pool:false};const names=new Set(list.map(x=>x.n)),n=JOURNAL.filter(j=>j.g===g&&names.has(j.n)).length,L=n>=LEARN_MIN;
- const pool=!!lb&&list.some(x=>inPool(x.n,lb));let a=0,b=0;for(const x of list){const w=(L?itemW(g,x.n):1)*(pool&&!inPool(x.n,lb)?POOL_W:1);b+=w;if(x.t==='M')a+=w}return{p:a/b,learn:L?n:0,pool}}
+function listChance(g,list,lb){if(!list.length)return{p:0,learn:0,pool:false,mix:{}};const names=new Set(list.map(x=>x.n)),n=JOURNAL.filter(j=>j.g===g&&names.has(j.n)).length,L=n>=LEARN_MIN;
+ const pool=!!lb&&list.some(x=>inPool(x.n,lb)),mix={};let b=0;for(const x of list){const w=(L?itemW(g,x.n):1)*(pool&&!inPool(x.n,lb)?POOL_W:1);b+=w;mix[x.t]=(mix[x.t]||0)+w}for(const k in mix)mix[k]/=b;return{p:mix.M||0,learn:L?n:0,pool,mix}}
 // Пулы: к какой подписи ящика относится предмет. Это оценка по смыслу названия, не данные игры —
 // поэтому пул только меняет вес (POOL_W у чужих предметов), но ничего не исключает.
 const POOLS={
@@ -595,7 +595,7 @@ class Detector{
 
 /* ===== Состояние ===== */
 const $=id=>document.getElementById(id);
-const VER='версия 5';$('ver').textContent=VER;
+const VER='версия 6';$('ver').textContent=VER;
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=n=>n.toLocaleString('ru-RU').replace(/ /g,' ')+' ₭';
 const DEF={sens:6,minDb:-60,capMs:400,minSim:75,vis:true,rec:false,recG:1,adv:true,map:'',mode:'',autoPip:true};
@@ -647,14 +647,14 @@ function view(it,sel=sizeSel){const auto=sizeKey(it.size),top=topOf(it,sel===nul
  if(sel==='')st='all';else if(sel){key=sel;st='ok'}else if(auto){key=auto;st=autoFits?'ok':'nosuch'}else st=G.red?'unknown':'none';
  const list=st==='all'||st==='none'?G.items:st==='ok'?G.items.filter(x=>x.ns===key):[];const c=listChance(top.g,list,it.label);
  const max=st==='unknown'?Math.max(...[...new Set(G.items.map(x=>x.ns))].map(k=>listChance(top.g,G.items.filter(x=>x.ns===k),it.label).p)):c.p;
- return{G,top,auto,autoFits,key,st,list,red:list.filter(x=>x.t==='M').length,p:c.p,learn:c.learn,pool:c.pool,max,rival:rivalOf(it,top,key)}}
+ return{G,top,auto,autoFits,key,st,list,red:list.filter(x=>x.t==='M').length,p:c.p,learn:c.learn,pool:c.pool,mix:st==='unknown'?listChance(top.g,G.items,it.label).mix:c.mix,max,rival:rivalOf(it,top,key)}}
 // Итог для окна: yes — точно, may — возможно да, mayno — возможно нет, no — нет, q — не понял
 function verdict(it){const V=view(it,null);if(!V||V.top.s<MAYBE)return{c:'q',big:'Не понял',pc:'',note:'потяни ящик ещё раз',V:null};
  const sure=V.top.s>=set.minSim/100;if(V.st==='nosuch')return{c:'q',big:'Не понял',pc:'',note:'ящика '+V.key+' с таким звуком нет — потяни ещё раз',V,sure};
  const un=V.st==='unknown',p=un?V.max:V.p,lo=V.rival?Math.min(p,V.rival.p):p,hi=V.rival?Math.max(p,V.rival.p):p,n=x=>x>0&&x<0.01?1:Math.round(x*100);
  const note=[un?'размер не виден':'',V.pool?'с учётом подписи':'',sure?'':'звук узнан неточно',V.rival?'похоже ещё на №'+V.rival.g:''].filter(Boolean).join(' · ');
  const pc=un?'до '+n(p)+'%':n(lo)===n(hi)?(sure?'':'≈')+n(p)+'%':n(lo)+'–'+n(hi)+'%';
- if(hi===0)return sure?{c:'no',big:'Красного нет',pc:'0%',note,V,sure}:{c:'mayno',big:'Возможно нет',pc:'≈0%',note,V,sure};
+ if(hi===0)return{c:'no',big:sure?'Красного нет':'Скорее нет',pc:'0%',note,V,sure};
  if(lo>=0.995&&sure&&!un)return{c:'yes',big:'Красный есть',pc:'100%',note,V,sure};
  return(lo+hi)/2>=0.5?{c:'may',big:'Возможно да',pc,note,V,sure}:{c:'mayno',big:'Возможно нет',pc,note,V,sure}}
 const stText=V=>V.st==='nosuch'?'Ящика '+V.key+' с таким звуком нет':V.st==='unknown'?visWhy():'';
@@ -736,23 +736,27 @@ document.querySelectorAll('.impFile').forEach(el=>el.addEventListener('change',i
 // Время кадров и звуков сводится к одним часам (performance.now), потом — к отсчётам звука.
 const VIS={reader:null,video:null,on:false,w:null,busy:false,lastSent:-1e9,vOff:null,hl:[],lastHl:-1e12,Phist:[],P:0,sr:48000,offs:[]};
 const WSRC=String.raw`
-let lastFull=-1e9,fullId=0,GC=null,GX=null,TPL=[],SOFT=[],LC=new Map(),autoSeen=false;
+let SCAN=false,lastFull=-1e9,fullId=0,GC=null,GX=null,TPL=[],SOFT=[],LC=new Map(),autoSeen=false;
 const unb=s=>{const b=atob(s),u=new Uint8Array(b.length);for(let i=0;i<b.length;i++)u[i]=b.charCodeAt(i);return u};
 // сетка: берём кусок кадра в полном качестве, подписи узнаём один раз на ящик
 // где в кадре сама игра: весь кадр; 16:9 по центру (чёрные полосы); окно с заголовком сверху
 let VP=null,diag='';
 function views(W,H){const o=[null],a=16/9;if(Math.abs(W/H-a)>0.01){const w=Math.min(W,H*a),h=w/a;o.push([(W-w)/2,(H-h)/2,w,h],[(W-w)/2,H-h,w,h])}
  for(const q of[0.014,0.02,0.028,0.04])o.push([0,H*q,W,H*(1-q)]);return o}
-function gridOf(fr,sw,sh,full){const L=VP?[VP.v]:full?views(sw,sh):[null];let best=null;
- for(const v of L){const r=gridTry(fr,sw,sh,v);if(r&&(!best||r.known*3+r.boxes.length>best.known*3+best.boxes.length)){best=r;best.v=v}if(best&&best.known>=5)break}
- if(best&&best.known>=3)VP={v:best.v,miss:0};else if(VP&&++VP.miss>12)VP=null;return best}
+// верное положение: больше узнанных подписей и строки сетки сходятся с бегунком прокрутки (дробная часть около нуля)
+const vscore=r=>{const e=(r.sb?r.sb.off:0)+r.off;return r.known*3+r.boxes.length-60*Math.abs(e-Math.round(e))};
+function gridOf(fr,sw,sh,full){if(VP&&(VP.sw!==sw||VP.sh!==sh))VP=null;
+ if(VP){const r=gridTry(fr,sw,sh,VP.v);if(r&&r.known>=3){VP.miss=0;const e=(r.sb?r.sb.off:0)+r.off;VP.fr=Math.abs(e-Math.round(e))>0.3?VP.fr+1:0}else VP.miss++;if(VP.miss>12||VP.fr>25)VP=null;return r}
+ let best=gridTry(fr,sw,sh,null);if(best)best.v=null;if(!full&&!(best&&best.known>=3))return best;
+ for(const v of views(sw,sh)){if(!v)continue;const r=gridTry(fr,sw,sh,v);if(r){r.v=v;if(!best||vscore(r)>vscore(best)+2)best=r}}
+ if(best&&best.known>=3)VP={v:best.v,miss:0,fr:0,sw,sh};return best}
 function gridTry(fr,sw,sh,v){const R=TraderGrid.REG(sw,sh,v);if(!GC||GC.width!==R.dw||GC.height!==R.dh){GC=new OffscreenCanvas(R.dw,R.dh);GX=GC.getContext('2d',{willReadFrequently:true});GX.imageSmoothingQuality='high'}
  GX.drawImage(fr,R.sx,R.sy,R.sw,R.sh,0,0,R.dw,R.dh);const px=GX.getImageData(0,0,R.dw,R.dh).data,g=TraderGrid.gray(px,R.dw,R.dh),r=TraderGrid.scan(g,R.dw,R.dh);
  if(!r){diag='линий сетки не видно, кадр '+sw+'×'+sh;return null}if(r.closed<4){diag='клеток найдено '+r.closed+', кадр '+sw+'×'+sh;return null}
  let known=0;const boxes=r.boxes.map(b=>{const key=b.c+','+b.r+','+b.w+','+b.h,old=LC.get(key);let q=null;if(old){let s=0;for(let i=0;i<b.lb.length;i+=3)s+=Math.abs(b.lb[i]-old.lb[i]);if(s/(b.lb.length/3)<9)q=old.q}
-  if(!q){q=TraderGrid.classify(b.lb,TPL,SOFT);LC.set(key,{lb:b.lb,q});if(LC.size>400)LC.clear()}if(q.k)known++;return{c:b.c,r:b.r,w:b.w,h:b.h,k:q.k,lb:q.k?null:b.lb}});
+  if(!q){q=TraderGrid.classify(b.lb,TPL,SOFT);LC.set(key,{lb:b.lb,q});if(LC.size>400)LC.clear()}return{c:b.c,r:b.r,w:b.w,h:b.h,k:q.k,how:q.how,lb:b.lb,ic:b.ic}}).filter(b=>b.ic>=0.6||b.h===1&&b.k&&b.how==='hard');for(const b of boxes)if(b.k)known++;
  diag='ящиков '+boxes.length+', подписей '+known+', кадр '+sw+'×'+sh;
- const o={boxes,known,rows:r.rows,off:(r.f-TraderGrid.MY)/TraderGrid.S,dx:r.dx/TraderGrid.S,sb:r.sb,vh:r.vh/TraderGrid.S};if(boxes.length>=3)o.cur=curOf(px,R.dw,R.dh,v?v[2]:sw,o);return o}
+ const o={boxes,known,rows:r.rows,off:(r.f-TraderGrid.MY)/TraderGrid.S,dx:r.dx/TraderGrid.S,sb:r.sb,vh:r.vh/TraderGrid.S};if(boxes.length>=3&&!SCAN)o.cur=curOf(px,R.dw,R.dh,v?v[2]:sw,o);return o}
 function curOf(d,w,h,sw,gr){const T=TraderGrid,k=T.S/(T.K.cell*sw)/0.625,f=q=>T.cursor(d,w,Math.ceil(2*q)+1,Math.ceil(2*q)+1,w-Math.ceil(9*q)-1,h-Math.ceil(8*q)-1,q);
  let p=f(k);if(!p&&Math.abs(sw/2560-1)>0.1)p=f(1.349);return p?{cx:(p.x-T.MX)/T.S-gr.dx,cy:(p.y-T.MY)/T.S-gr.off}:null}
 let C=null,X=null,clean=null,lastHl=-1e12,hlStart=0,P=0,resync=false;const RING=[];
@@ -773,12 +777,13 @@ function crop(src,r){const[bx,by,bw,bh]=r.box,pad=Math.round(Math.max(bw,bh)*0.3
 onmessage=async e=>{const m=e.data;
  if(m.cmd==='P'){P=m.P;return}
  if(m.cmd==='resync'){resync=true;return}
+ if(m.cmd==='scan'){SCAN=m.on;return}
  if(m.cmd==='full'){fullId=m.id;return}
  if(m.cmd==='rescan'){VP=null;LC.clear();return}
  if(m.cmd==='lbl'){TPL=m.hard.map(x=>({k:x[0],a:unb(x[1])}));SOFT=m.soft.map(x=>({k:x[0],a:unb(x[1])}));LC.clear();return}
  if(m.cmd==='tr'){TP=m.pos;TN=m.neg;trMask();if(C&&TM)postMessage({type:'tr',tr:trScore(sigOf())});return}
  if(m.cmd==='snap'){if(!C){postMessage({type:'snap',id:m.id,sig:null});return}const sig=sigOf();postMessage({type:'snap',id:m.id,sig,blob:await C.convertToBlob({type:'image/jpeg',quality:.9})});return}
- if(m.cmd==='reset'){clean=null;lastHl=-1e12;for(const f of RING)f.b.close();RING.length=0;return}
+ if(m.cmd==='reset'){VP=null;autoSeen=false;SCAN=false;LC.clear();clean=null;lastHl=-1e12;for(const f of RING)f.b.close();RING.length=0;return}
  if(m.cmd==='dbg'){const fr=RING.filter(x=>x.ts>=m.from&&x.ts<=m.to),before=RING.filter(x=>x.ts<m.from).pop();if(!fr.length){postMessage({type:'dbg',id:m.id,blob:null});return}
   const n=Math.min(5,fr.length),pk=Array.from({length:n},(_,i)=>fr[Math.round(i*(fr.length-1)/Math.max(1,n-1))]),all=[before,...pk].filter(Boolean);
   const W=all[0].b.width,H=all[0].b.height,c=new OffscreenCanvas(W,H*all.length),x=c.getContext('2d');
@@ -787,7 +792,7 @@ onmessage=async e=>{const m=e.data;
   const blob=await c.convertToBlob({type:'image/jpeg',quality:0.88});postMessage({type:'dbg',id:m.id,blob});return}
  const fr=m.frame,ts=m.ts;try{const sw=fr.displayWidth||fr.width,sh=fr.displayHeight||fr.height,f=Math.min(1,1600/sw),W=Math.round(sw*f),H=Math.round(sh*f);
   if(!C||C.width!==W||C.height!==H){C=new OffscreenCanvas(W,H);X=C.getContext('2d',{willReadFrequently:true})}
-  X.drawImage(fr,0,0,W,H);let gr=null;try{const full=ts-lastFull>1500;if(full&&!(VP&&VP.miss===0))lastFull=ts;gr=gridOf(fr,sw,sh,full&&!VP)}catch(e){diag='ошибка: '+e.message}if(fullId){const id=fullId;fullId=0;const c=new OffscreenCanvas(sw,sh);c.getContext('2d').drawImage(fr,0,0);c.convertToBlob({type:'image/jpeg',quality:.95}).then(blob=>postMessage({type:'snap',id,blob,sig:1}))}fr.close();const img=X.getImageData(0,0,W,H),t=CargoVision.tints(img),bf=clean;let out={type:'f',ts,hl:false,r:null,tr:TM?trScore(sigOf()):null};if(gr&&gr.known>=3){autoSeen=true;out.auto=true;out.tr=1}else if(autoSeen&&out.tr==null)out.tr=0;if(gr&&(gr.known>=3||gr.boxes.length>=6&&out.tr>=0.5)){out.grid=gr;out.cur=gr.cur}out.diag=diag;
+  X.drawImage(fr,0,0,W,H);let gr=null;try{const full=ts-lastFull>1500;if(full&&!(VP&&VP.miss===0))lastFull=ts;gr=gridOf(fr,sw,sh,full&&!VP)}catch(e){diag='ошибка: '+e.message}if(fullId){const id=fullId;fullId=0;const c=new OffscreenCanvas(sw,sh);c.getContext('2d').drawImage(fr,0,0);c.convertToBlob({type:'image/jpeg',quality:.95}).then(blob=>postMessage({type:'snap',id,blob,sig:1}))}fr.close();if(SCAN&&gr&&gr.known>=3){autoSeen=true;postMessage({type:'f',ts,hl:false,r:null,auto:true,tr:1,grid:gr,diag});return}const img=X.getImageData(0,0,W,H),t=CargoVision.tints(img),bf=clean;let out={type:'f',ts,hl:false,r:null,tr:TM?trScore(sigOf()):null};if(gr&&gr.known>=3){autoSeen=true;out.auto=true;out.tr=1}else if(autoSeen&&out.tr==null)out.tr=0;if(gr&&(gr.known>=3||gr.boxes.length>=6&&out.tr>=0.5)){out.grid=gr;out.cur=gr.cur}out.diag=diag;
   // кадр без новой зелени — новый «до»; «зелень» дольше 6 с — уже другой экран, а не подсветка
   // после итога действия (ящик положили) берём новый «до»: на экране мог появиться цветной фон положенного предмета
   if(resync&&!CargoVision.hasHighlight(img,t,null,true)){resync=false;clean={ts,t}}
@@ -835,9 +840,13 @@ const TraderGrid=(()=>{
   for(const cs of comp.values()){const xs=cs.map(i=>i%COLS),ys=cs.map(i=>i/COLS|0),c0=Math.min(...xs),r0=Math.min(...ys),bw=Math.max(...xs)-c0+1,bh=Math.max(...ys)-r0+1;
    if(cs.length!==bw*bh||bw>4||bh>4)continue;let ok=true;
    for(let q=0;q<bw&&ok;q++)ok=hB[r0*COLS+c0+q]&&hB[(r0+bh)*COLS+c0+q];for(let q=0;q<bh&&ok;q++)ok=vB[(r0+q)*(COLS+1)+c0]&&vB[(r0+q)*(COLS+1)+c0+bw];if(!ok)continue;cells++;
-   const lb=label(g,w,X(c0),Y(r0));if(!lb.ink)continue;boxes.push({c:c0,r:r0,w:bw,h:bh,lb:lb.a})}
+   const lb=label(g,w,X(c0),Y(r0));if(!lb.ink)continue;boxes.push({c:c0,r:r0,w:bw,h:bh,lb:lb.a,ic:icon(g,w,h,X(c0)+bw*S/2,Y(r0)+bh*S/2)})}
   const sb=scrollbar(g,w,h,X(COLS));
   return{boxes,rows,f,dx:bx.d,X0:X(0),closed:cells,sb,vh:h-2*MY}}
+ // значок чемоданчика в центре ящика (у ящиков в одну строку подпись может его закрывать — тогда решает узнанная подпись)
+ const IW=44,IH=34,ICON=Uint8Array.from(atob('QkJCQkJCQkNDREJAS2Z6emZWTEdDRUtEQkJCQkJCQkJCQUJCQkJCQkJCQkJCQkJBQUFCQkFAQUxvjJeZlIJiSkJHSEBBQ0NCQkJCQ0NDQkJCQkJCQkJCQkJBQkFBQEFAPkVZd5GblpSOeFhGQUpeX1NNR0NBQUJCQkJCQkJCQkJCQkJCQkFCQUFAPkBQZoKVmZuVhGtTQ0JPZYSMgHNnXlNMSENBQUJCQkFBQUJCQkJCQkNDQUFFVnmNlZaUiXhdSUBGV3WKl5qZlZCIgXRlVkxIQkFCQUFBQkNCQkNDQkFCT2qBkZeWlIZoTUNDTWWDkpeYl5WWlpaVlpCDdWRPREFDQ0JBQ0NCRENCQ1RzjpubmJODZUxAQ1VyipmZl5eWlpaXlpednJePfFxJQEJEQ0REQkJDREpgfY+amZaPd1RFQUdjfo+WlpaWlpaXl5WVlZiZjnZcSUNDR1BXVElDQkVQa4WUnZySgGVLPkJQaoiVlZWUlZWWlpeWlJSYk4FrU0FAQUhdeYaCbl1NWXePmJmZkHlZSEFDV3uQlpWWl5WVlpaXlZaYmJJ/YkxEQUNLaIePlpaTkIJ+kpaVkYJsU0RCTmOAlpmYl5iWlpaVlZaVl5mPd1xLQ0JIWnWKlZeYmJiZkIuYmJSFZkxDQlFyipaYl5WWl5eWlpWWmJmUhW9XSERETWSAk5eYlpeXlJaRi5eYknxTQUBEZJGVl5iXlpaXmJmYlpubkn1lUEVDRVd0i5aYmZiXl5eUlZGHmJuUeFZIR0prlZGVlpeWlpeYmZmZmZB2XEpFRU1gfpOampiYmJeXlpSUk4aWm5R5Z3JtY3GSkJSWlpWVlpeYl5GFb1hHQ0lUaomZmpqYl5eXlpaXlpiWa4GUlH5yiY96dpGTlJeXlpWVlZeUgmZPQ0FLYHyPlpmZmZiXl5iXl5eWl4dgZ2htaWp/in94kpWWl5aVlZSVmZF1VEJASGB+kpmZl5iYl5eXmJiYl5SAZH57ZlhWYmx0enqUnJqXmJWWlpaYjnJSR0dRdZKbmpmYmJiYl5eYmZaOe2JljpmUf2tqbXR5bHyLlJmXlpaWl5mPc1JMTFqDlpmYmJmamZiYmJiXinVncoSMmp2Uem18iXtiZGpyf4uTmJubmo5xYGRYYImXl5aXmpybmJmYkoRwaXySkoaVnJZ7YGVuamx7bV1ZZXaFkJWXi3JzindpipWWlpeYmpmYlpJ+Z2iCk5mThpOal3tSQkVMcZmRhXRmWlhkeYWDcnqThnKLlZWVl5eXmJaNemprgpKWmJSGlJmYflI/QUxviXV0foaFdmlmZmZlcH93cYuXlpaYmJiVi3docouYl5OVkomUmJh/VD9BTXCIalFSYG57gXl0Z11pZWNlg5OWl5ubmIp0cnyMmJuZk5ORjJmdm4BXQUJMc5ODWERCR1JicYeJc3N3a1xqdYKPmJaGbGt+lZeXmpqVm5WFlp2eg1hCQ0xymJFzV0VCRU1kh5N3b4B5YmZhYGl1dmpwgJCYmJeXmJaYiWx/kpeCWENDTG+VlJKEb2VjbH6Sk3JVW2Bjf4B2al9dcomSlpiXl5aXkoRoTlpjbGdUREJMcpiVl5eUjoqKjZSPbUlGSV+NmZOMhYSQmZiWmJiZmJWCZkxAQ0RKS0dAQktwl5iYmpiVlJSTlI9sSkVHXY+XlZeVlZeVlpSVlZaSgGJMQ0JDQ0JCQ0FDSF6AjZKWlpSUlJSVkWxMREZbjZOTlZaYmZiWlJSUjHdZSEJBQkJCQUJCQkNFSVVhcICMlZWVlZWSbUtFRl2NlZSWl5qZmJeYlYluU0ZCQ0JCQkJCQkFCQUJBQUZNVmNteIePlJJuTEVHX5CYlpeYmZeXl5SDZU1DQkJCQkJCQkJCQkFBQEBCQ0NAQUNPX26BhmlNREVfj5SVl5iYmJaQf2FEQEFBQUFCQkJCQkJCQkFBQUJDREJBQEBCSFRdVk1BRFyMlJaYmZidlHpaRkBAQUFBQUE='),c=>c.charCodeAt(0));
+ function icon(g,w,h,cx,cy){let best=-1;for(let dy=-4;dy<=4;dy++)for(let dx=-4;dx<=4;dx++){let sa=0,sb=0,saa=0,sbb=0,sab=0,q=0;for(let j=0;j<IH;j+=2){const Y=Math.round(cy-IH/2)+dy+j;if(Y<0||Y>=h)continue;for(let i=0;i<IW;i+=2){const u=ICON[j*IW+i],v=g[Y*w+Math.round(cx-IW/2)+dx+i]||0;q++;sa+=u;sb+=v;saa+=u*u;sbb+=v*v;sab+=u*v}}
+   const va=saa-sa*sa/q,vb=sbb-sb*sb/q;if(va>q&&vb>q*0.5){const c=(sab-sa*sb/q)/Math.sqrt(va*vb);if(c>best)best=c}}return best}
  // подпись: первая строка; ink — есть ли там вообще буквы
  function label(g,w,x,y){const a=new Uint8Array(LW*LH);let n=0;for(let j=0;j<LH;j++)for(let i=0;i<LW;i++){const v=g[(y+3+j)*w+x+3+i]||0;a[j*LW+i]=v;if(v>85)n++}return{a,ink:n>=25}}
  // бегунок прокрутки: сколько строк осталось выше
@@ -875,54 +884,67 @@ const LBL={Z:['Загадочный груз','Груз','',1],N:['Необыч�
 const TGS={phase:'auto',seen:new Map(),total:0,bottom:false,diag:'',frames:0,scanAt:0,map:new Map(),cand:new Map(),shift:0,rows:10,bad:0,cur:[],hot:null,sel:null,sig:'',seenAt:0};
 let OWNLB=jget('abiuho-labels',[]).filter(x=>Array.isArray(x)&&LBL[x[0]]&&typeof x[1]==='string'&&unb64(x[1]).length===1360);
 function lblSend(){if(VIS.w)VIS.w.postMessage({cmd:'lbl',hard:LBT.hard.concat(OWNLB),soft:LBT.soft})}
-function tgClear(){TGS.phase='auto';TGS.seen.clear();TGS.total=0;TGS.bottom=false;TGS.map.clear();TGS.cand.clear();TGS.shift=0;TGS.bad=0;TGS.cur.length=0;TGS.hot=TGS.sel=null}
+function tgClear(){TGS.phase='auto';if(VIS.w)VIS.w.postMessage({cmd:'scan',on:false});TGS.seen.clear();TGS.total=0;TGS.bottom=false;TGS.map.clear();TGS.cand.clear();TGS.shift=0;TGS.bad=0;TGS.cur.length=0;TGS.hot=TGS.sel=null}
 const boxSize=b=>normSize(b.w+'x'+b.h);
 const hits=(a,b)=>a.c<b.c+b.w&&b.c<a.c+a.w&&a.row<b.row+b.h&&b.row<a.row+a.h;
 // новый кадр: сдвигаем видимую часть на прокрутку и складываем ящики в общую карту
 // «Сканировать»: чистая карта, дальше игрок прокручивает список, пока не увидим все строки
 function scanStart(){if(!S.ctx){status('Сначала «Слушать игру» и выбери окно игры');return}if(!VIS.on){status('Экрана не видно: включи «Определять размер ящика по экрану» и запусти заново');return}
- clearDone();TGS.phase='scan';TGS.scanAt=Date.now();TGS.frames=0;VIS.w.postMessage({cmd:'rescan'});renderPip(null)}
-function scanDone(){TGS.phase='check';TGS.sel=null;tgRank();renderPip(lastNow)}
+ clearDone();TGS.phase='scan';TGS.scanAt=Date.now();TGS.frames=0;VIS.w.postMessage({cmd:'rescan'});VIS.w.postMessage({cmd:'scan',on:true});renderPip(null)}
+function scanDone(){TGS.phase='check';if(VIS.w)VIS.w.postMessage({cmd:'scan',on:false});mapSave();TGS.sel=null;tgRank();renderPip(lastNow)}
 const rowSeen=r=>(TGS.seen.get(r)||0)>=2;
 function scanState(){const n=Math.max(1,TGS.total);let a=0;const miss=[];for(let r=0;r<n;r++)if(rowSeen(r))a++;else miss.push(r);return{n,a,miss}}
 function scanText(){const s=scanState();if(!TGS.map.size)return TGS.frames<3?'жду картинку игры':TGS.diag||'открой торговца, вкладка «Купить»';
  const below=s.miss.some(r=>r>=TGS.shift+TGS.rows),above=s.miss.some(r=>r<TGS.shift);return'найдено '+TGS.map.size+' · строк '+s.a+' из '+s.n+(below?' · крути вниз':above?' · крути вверх':'')}
 async function saveFull(){if(!VIS.on||!VIS.w){status('Сначала «Слушать игру»');return}const id=++snapId;const m=await new Promise(ok=>{DBGW.set('s'+id,{ok});VIS.w.postMessage({cmd:'full',id});setTimeout(()=>{if(DBGW.delete('s'+id))ok(null)},4000)});
  if(!m||!m.blob){status('Кадр не пришёл');return}const a=document.createElement('a');a.href=URL.createObjectURL(m.blob);a.download='abi-uho-torgovec-'+new Date().toLocaleTimeString('ru-RU').replace(/:/g,'-')+'.jpg';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),5000);status('Кадр сохранён в загрузки',true)}
+// подпись ящика — та, за которую больше кадров (подсказка или курсор могли закрыть её на миг); размытые образцы весят меньше
+function vote(o,b){if(o.named||!b.k)return;o.votes[b.k]=(o.votes[b.k]||0)+(b.how==='hard'?3:1);let bk=null;for(const k in o.votes)if(!bk||o.votes[k]>o.votes[bk])bk=k;if(bk===b.k&&b.lb){o.lb=b.lb;o.soft=b.how!=='hard'}o.k=bk}
+// карта и итоги переживают перезагрузку страницы (до 45 минут — длиннее рейда не нужно)
+let mapT=0;function mapSave(){clearTimeout(mapT);mapT=setTimeout(()=>{try{localStorage.setItem('abiuho-map',JSON.stringify({t:Date.now(),phase:TGS.phase==='check'?'check':'auto',total:TGS.total,no:doneNo,seen:[...TGS.seen],boxes:[...TGS.map.values()].map(b=>({key:b.key,c:b.c,row:b.row,w:b.w,h:b.h,k:b.k,n:b.n,named:b.named,soft:b.soft,votes:b.votes,lb:b.lb?b64(b.lb):'',res:b.res?{id:b.res.id,t:b.res.t,matches:b.res.matches.slice(0,6),size:{w:b.w,h:b.h,how:'grid',box:null,shot:null,conf:1,P:0},merged:true,kind:b.res.kind,label:b.res.label,no:b.res.no,tg:b.key,found:b.res.found}:null}))}))}catch(e){}},600)}
+function mapLoad(){try{const d=JSON.parse(localStorage.getItem('abiuho-map')||'null');if(!d||Date.now()-d.t>45*60e3||!Array.isArray(d.boxes))return;
+ for(const b of d.boxes)if(b&&b.c>=0&&b.c<9&&b.row>=0&&b.w>=1&&b.h>=1&&(!b.k||LBL[b.k]))TGS.map.set(b.c+','+b.row,{...b,key:b.c+','+b.row,miss:0,votes:b.votes||{},lb:b.lb?unb64(b.lb):null,res:b.res&&Array.isArray(b.res.matches)&&b.res.matches.every(m=>m.g>=1&&m.g<=38)?b.res:null});
+ TGS.phase=d.phase==='check'&&TGS.map.size?'check':'auto';TGS.total=+d.total||0;doneNo=+d.no||0;TGS.seen=new Map(d.seen||[]);tgRank()}catch(e){}}
 function tgFrame(m){const g=m.grid;TGS.frames++;if(m.diag!=null&&m.diag!==TGS.diag){TGS.diag=m.diag;if(TGS.phase==='scan'&&!TGS.map.size)renderPip(null)}if(!g)return;TGS.seenAt=performance.now();const at=toSamp(m.ts);
  const place=s=>g.boxes.map(b=>({...b,row:b.r+s}));const all=[...TGS.map.values()];
  const rate=s=>{let ok=0,bad=0;for(const b of place(s)){const o=TGS.map.get(b.c+','+b.row);if(o&&o.w===b.w&&o.h===b.h&&(!o.k||!b.k||o.k===b.k))ok++;else if(all.some(q=>hits(q,b)))bad++}return{s,ok,bad,v:ok-bad}};
- const est=g.sb?Math.round(g.sb.off+g.off):null,tries=est!=null?[est,est-1,est+1]:Array.from({length:60},(_,i)=>i);
+ const ef=g.sb?g.sb.off+g.off:null;if(ef!=null&&Math.abs(ef-Math.round(ef))>0.32&&!g.boxes.some(b=>TGS.map.has(b.c+','+(b.r+Math.round(ef)))))return;   // список едет — кадр пропускаем
+ const est=ef!=null?Math.round(ef):null,tries=est!=null?[est,est-1,est+1]:Array.from({length:60},(_,i)=>i);
  let best=null;for(const s of tries){if(s<0)continue;const r=rate(s);if(!best||r.v>best.v||r.v===best.v&&s===TGS.shift&&est==null)best=r}if(!best)return;
- // почти всё не совпадает несколько кадров подряд — это другой торговец
- if(best.bad>=4&&best.bad>best.ok*2){if(++TGS.bad<6)return;const was=TGS.phase;tgClear();TGS.phase=was==='auto'?'auto':'scan';best={s:est||0,ok:0,bad:0}}else TGS.bad=0;
+ // не сошлось рядом с бегунком — ищем по всему списку, и только потом решаем, что это другой торговец
+ if(best.bad>=3&&best.bad>best.ok)for(let s=0;s<=Math.max(40,TGS.total);s++){const r=rate(s);if(r.ok>=3&&r.v>best.v)best=r}
+ if(best.bad>=4&&best.bad>best.ok*2){if(!TGS.bad)TGS.badAt=performance.now();if(++TGS.bad<12||performance.now()-TGS.badAt<2500||g.known<4)return;const was=TGS.phase;tgClear();TGS.phase=was==='auto'?'auto':'scan';if(TGS.phase==='scan'&&VIS.w)VIS.w.postMessage({cmd:'scan',on:true});best={s:est||0,ok:0,bad:0}}else TGS.bad=0;
  const P=place(best.s),moved=TGS.shift!==best.s;TGS.shift=best.s;TGS.rows=g.rows;
  for(const b of P){const id=[b.c,b.row,b.w,b.h].join(),q=TGS.cand.get(id)||{n:0};q.n++;TGS.cand.set(id,q);const key=b.c+','+b.row,o=TGS.map.get(key);
-  if(o&&o.w===b.w&&o.h===b.h){o.n=q.n;o.miss=0;o.gone=false;if(b.k&&!o.named)o.k=b.k;if(!o.k&&b.lb)o.lb=b.lb;continue}
+  if(o&&o.w===b.w&&o.h===b.h){o.n=q.n;o.miss=0;o.gone=false;vote(o,b);continue}
   if(q.n<2||TGS.phase==='check')continue;const clash=[...TGS.map.entries()].filter(([,x])=>hits(x,b));if(clash.some(([,x])=>x.n>=q.n||x.res))continue;for(const[k]of clash)TGS.map.delete(k);
-  TGS.map.set(key,{key,c:b.c,row:b.row,w:b.w,h:b.h,k:b.k,lb:b.lb,n:q.n,miss:0,res:null})}
+  const nb={key,c:b.c,row:b.row,w:b.w,h:b.h,k:null,lb:b.lb,n:q.n,miss:0,res:null,votes:{}};vote(nb,b);TGS.map.set(key,nb)}
  if(TGS.phase!=='check'){TGS.total=g.sb&&g.sb.q<=0.97?Math.max(g.rows,Math.round(g.vh/g.sb.q)):Math.max(TGS.total,g.rows);for(let r=best.s;r<best.s+g.rows;r++)TGS.seen.set(r,(TGS.seen.get(r)||0)+1);
   if(TGS.phase==='scan'&&TGS.map.size&&Date.now()-TGS.scanAt>1200&&!scanState().miss.length)scanDone()}
  // ящика давно нет на его месте — куплен
  for(const o of TGS.map.values())if(o.row>=best.s&&o.row+o.h<=best.s+g.rows&&!P.some(b=>b.c===o.c&&b.row===o.row)&&!pick){if(++o.miss>30)o.gone=true}
  const c=m.cur;let key=null;if(c){const x=c.cx,y=c.cy+best.s;for(const o of TGS.map.values())if(x>=o.c&&x<o.c+o.w&&y>=o.row&&y<o.row+o.h)key=o.key}
  if(c){TGS.cur.push({at,key});while(TGS.cur.length>60)TGS.cur.shift()}
- TGS.hot=key;tgRank();if(TGS.phase==='scan')renderPip(lastNow);renderGrid(moved)}
+ TGS.hot=key;tgRank();if(TGS.phase==='scan')renderPip(lastNow);else if(TGS.map.size!==TGS.saved){TGS.saved=TGS.map.size;mapSave()}renderGrid(moved)}
 // над каким ящиком был курсор в момент звука «взял»
 function boxAt(on,sr){const L=TGS.cur.filter(x=>x.at>=on-0.6*sr&&x.at<=on+0.2*sr);if(!L.length)return null;L.sort((a,b)=>Math.abs(a.at-on)-Math.abs(b.at-on));return L[0].key}
 // приоритет до звука: бывают ли красные такого размера и что написано на ящике
-function poolReds(k,lb){const L=[];for(const G of GROUPS)for(const x of G.items)if(x.ns===k)L.push(x);const pool=!!lb&&!!POOLS[POOL_OF[lb]||lb]&&L.some(x=>inPool(x.n,lb));
- let a=0,b=0;for(const x of L){const w=pool&&!inPool(x.n,lb)?POOL_W:1;b+=w;if(x.t==='M')a+=w}return b?a/b:0}
+// что может лежать в ящике такого размера с такой подписью (доли по цветам), ещё до звука
+function poolMix(k,lb){const L=[];for(const G of GROUPS)for(const x of G.items)if(x.ns===k)L.push(x);const pool=!!lb&&!!POOLS[POOL_OF[lb]||lb]&&L.some(x=>inPool(x.n,lb));
+ const m={};let b=0;for(const x of L){const w=pool&&!inPool(x.n,lb)?POOL_W:1;b+=w;m[x.t]=(m[x.t]||0)+w}for(const q in m)m[q]/=b;return m}
+const poolReds=(k,lb)=>poolMix(k,lb).M||0;
+// звёзды: 3 — тяни первым, 2 — стоит проверить, 1 — маловероятно, 0 — красных такого размера нет
+const stars=b=>b.pv>=0.45?3:b.pv>=0.2?2:b.pv>0?1:0;
 function prior(b){const k=boxSize(b),J=JOURNAL.filter(j=>j.lb===b.k&&j.s===k);if(b.k&&J.length>=LEARN_MIN)return{v:J.filter(j=>j.tier==='M').length/J.length,real:true};
  return{v:poolReds(k,b.k)*(b.k?LBL[b.k][3]:1)}}
-function tgRank(){const L=[...TGS.map.values()];for(const b of L){const p=prior(b);b.pv=p.v;b.real=p.real;b.rank=0}
+function tgRank(){const L=[...TGS.map.values()];for(const b of L){const p=prior(b);b.pv=p.v;b.real=p.real;b.rank=0;b.st=stars(b);b.mix=poolMix(boxSize(b),b.k)}
  L.filter(b=>!b.res&&!b.gone&&b.pv>0).sort((a,b)=>b.pv-a.pv||a.row-b.row||a.c-b.c).forEach((b,i)=>b.rank=i+1)}
 function tgAssign(it,key){const b=TGS.map.get(key);if(!b)return;it.tg=key;it.label=b.k;it.size={w:b.w,h:b.h,P:0,box:null,shot:null,conf:1,how:'grid'};
  const el=it.node&&it.node.querySelector('.ttl');if(el)el.innerHTML=itemTitle(it);
- if(!b.res||verdict(it).c!=='q'||verdict(b.res).c==='q'){if(b.res&&b.res!==it)b.res.over=true;b.res=it}tgRank()}
+ if(!b.res||verdict(it).c!=='q'||verdict(b.res).c==='q'){if(b.res&&b.res!==it)b.res.over=true;b.res=it}tgRank();mapSave()}
 // «взял»: ящик известен сразу, итог — после «положил»
 function tgAssignPending(it,key){const b=TGS.map.get(key);if(!b)return;it.tg=key;it.label=b.k;it.size={w:b.w,h:b.h,P:0,box:null,shot:null,conf:1,how:'grid'};TGS.sel=key}
-function lblLearn(key,k){const b=TGS.map.get(key);if(!b||!LBL[k])return;if(b.lb){OWNLB.unshift([k,b64(b.lb)]);OWNLB.length=Math.min(OWNLB.length,40);try{localStorage.setItem('abiuho-labels',JSON.stringify(OWNLB))}catch(e){}lblSend()}b.k=k;b.named=true;tgRank();renderGrid(false)}
+function lblLearn(key,k){const b=TGS.map.get(key);if(!b||!LBL[k])return;if(b.lb){OWNLB.unshift([k,b64(b.lb)]);OWNLB.length=Math.min(OWNLB.length,40);try{localStorage.setItem('abiuho-labels',JSON.stringify(OWNLB))}catch(e){}lblSend()}b.k=k;b.named=true;b.soft=false;tgRank();mapSave();renderGrid(false);renderPip(lastNow)}
 /* ===== Окно торговца ===== */
 const TR={pos:[],neg:[],score:null,tm:0,on:false,auto:false};const TR_TH=0.5,TR_HOLD=1500;
 try{const d=JSON.parse(localStorage.getItem('abiuho-trader')||'null');if(d)for(const k of['pos','neg'])TR[k]=(d[k]||[]).map(unb64).filter(u=>u.length===5184)}catch(e){}
@@ -951,9 +973,9 @@ function onVisMsg(e){const m=e.data;
  VIS.busy=false;if(m.err)logEv('кадр-ошибка',{m:m.err});if(m.auto)TR.auto=true;trFrame(m.tr);tgFrame(m);if(!m.hl)return;const at=toSamp(m.ts);
  if(at-VIS.lastHl>0.6*VIS.sr)logEv('подсветка началась');VIS.lastHl=at;
  if(m.r)m.r.shot=m.shot||null;VIS.hl.push({at,r:m.r});while(VIS.hl.length>80)VIS.hl.shift()}
-function visStart(stream){visStop();const vt=stream.getVideoTracks()[0];if(!vt||!set.vis)return;VIS.on=true;const w=visWorker();w.postMessage({cmd:'reset'});lblSend();trSend();
+function visStart(stream){visStop();const vt=stream.getVideoTracks()[0];if(!vt||!set.vis)return;VIS.on=true;const w=visWorker();w.postMessage({cmd:'reset'});lblSend();trSend();if(TGS.phase==='scan')w.postMessage({cmd:'scan',on:true});
  // кадр отдаём в поток не чаще раза в 0,15 с и только если он свободен — иначе пропускаем (без очереди и задержек)
- const send=(fr,tsMs)=>{const now=performance.now();if(!VIS.busy&&now-VIS.lastSent>=150&&set.vis){VIS.busy=true;VIS.lastSent=now;w.postMessage({frame:fr,ts:tsMs},[fr])}else fr.close();
+ const send=(fr,tsMs)=>{const now=performance.now();if(!VIS.busy&&now-VIS.lastSent>=(TGS.phase==='scan'?60:150)&&set.vis){VIS.busy=true;VIS.lastSent=now;w.postMessage({frame:fr,ts:tsMs},[fr])}else fr.close();
   if(VIS.busy&&now-VIS.lastSent>2000)VIS.busy=false};
  if('MediaStreamTrackProcessor' in window){try{const rd=new MediaStreamTrackProcessor({track:vt}).readable.getReader();VIS.reader=rd;
   (async()=>{try{for(;;){const{value,done}=await rd.read();if(done)break;const now=performance.now(),tsu=value.timestamp/1000;
@@ -1028,7 +1050,7 @@ function onLive(seg,sr,on){if(!set.rec&&!pick&&!inTrader()){logEv('звук не
  logEv('положил без взял — пропуск');const t=it.node&&it.node.querySelector('.meta');if(t)t.textContent+=' · «положил» без «взял» — пропущен';showNow(it)}
 // итог действия: размер по кадрам, пока тянули, затем экран и голос
 let lastFin={it:null,at:0,on:-1e12};const DONE=[];let doneNo=0;   // проверенные ящики — список в окне поверх игры
-function clearDone(){DONE.length=0;doneNo=0;tgClear();pick=null;lastNow=null;renderPip(null)}
+function clearDone(){DONE.length=0;doneNo=0;tgClear();mapSave();pick=null;lastNow=null;renderPip(null)}
 function finish(it,a,b){if(VIS.w)VIS.w.postMessage({cmd:'resync'});logEv('итог',{g:it.matches[0].g,a,b,hl:VIS.hl.filter(x=>x.at>=a&&x.at<=b).map(x=>x.r?x.r.w+'x'+x.r.h:'-')});applySize(it,a,b);lastFin={it,last:it,at:Date.now(),on:b};if(!it.no)it.no=++doneNo;DONE.unshift(it);if(DONE.length>30)DONE.pop();showNow(it);alertRed(it)}
 // второй звук не разобрать (наложился, тихий) или его не было — итог по «взял»
 function releaseOnly(pk,put,how){pk.merged=true;if(put){RECENT=RECENT.filter(x=>x!==put);put.node&&put.node.remove()}
@@ -1119,12 +1141,19 @@ $('bDev').onclick=async()=>{try{if(!$('dev').value){const t=await navigator.medi
 $('bStop').onclick=stop;
 /* ===== Окно поверх игры (Document Picture-in-Picture, Chrome 116+) ===== */
 let PIP=null;
-const VC={yes:'#e23b3b',may:'#e08a1e',mayno:'#b7a02c',no:'#59614f',q:'#6b7162'};
+// шанс красного — оттенки красного, чтобы не путать с цветами редкости предметов
+const VC={yes:'#e8302f',may:'#b23c38',mayno:'#6b3a35',no:'#59614f',q:'#6b7162'};
+const TC={M:'#ff4b4b',L:'#e8b43a',E:'#b07cf0',R:'#5aa2ff',C:'#c9cdc0'},TW={M:'красный',L:'золотой',E:'фиолетовый',R:'синий',C:'белый'};
+const mixList=m=>['M','L','E','R','C'].filter(k=>m&&m[k]>0.004).map(k=>[k,Math.max(1,Math.round(m[k]*100))]);
+const mixBar=m=>'<em>'+mixList(m).map(([k,n])=>`<s style="flex:${n};background:${TC[k]}"></s>`).join('')+'</em>';
+// какие предметы возможны: сначала красные, потом дорогие
+const cand=V=>V&&V.st==='ok'?[...V.list].sort((a,b)=>(b.t==='M')-(a.t==='M')||b.p-a.p):[];
+const mixText=m=>mixList(m).map(([k,n])=>TW[k]+' '+n+'%').join(' · ');
 const PIP_CSS=`*{box-sizing:border-box}body{margin:0;background:#151813;color:#e9ebe1;font:14px/1.35 Rubik,system-ui,sans-serif;height:100vh;display:flex;flex-direction:column}
 #p{--c:#6b7162;padding:8px 12px;flex:none;border-left:8px solid var(--c);background:color-mix(in srgb,var(--c) 22%,#151813)}
 ${Object.entries(VC).map(([k,v])=>'.'+k+'{--c:'+v+'!important}').join('')}
 .m{display:flex;justify-content:space-between;gap:8px;color:#b5baa8;font-size:12px}.m .on{color:#9fe07a}
-.big{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:clamp(20px,8vw,34px);line-height:1.1;font-weight:700;margin:4px 0 2px}.big b{color:#fff}
+.big{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:clamp(18px,6.2vw,32px);line-height:1.1;font-weight:700;margin:4px 0 2px}.big b{color:#fff}
 .s{color:#b5baa8;font-size:13px}
 #l{list-style:none;margin:0;padding:0;flex:1;min-height:0;overflow:auto}
 #l li{display:grid;grid-template-columns:26px 40px minmax(0,1fr) auto;gap:8px;align-items:center;padding:4px 12px 4px 4px;border-left:8px solid var(--c);border-bottom:1px solid #2e3428}
@@ -1139,27 +1168,32 @@ ${Object.entries(VC).map(([k,v])=>'.'+k+'{--c:'+v+'!important}').join('')}
 #g .b i{position:relative;z-index:1;font-style:normal;display:block;overflow-wrap:anywhere;font-size:var(--fs)}
 #g .b svg{position:absolute;left:50%;top:54%;width:calc(var(--cw)*.55);height:calc(var(--cw)*.45);transform:translate(-50%,-50%);opacity:.22}
 #g .b.lg{border-color:#46b061;box-shadow:inset 0 0 0 1px #46b061}#g .b.lg>i{color:#7fdc97}#g .b.lb{border-color:#4c8df0;box-shadow:inset 0 0 0 1px #4c8df0}#g .b.lb>i{color:#8db7ff}
-#g .b.skip{filter:brightness(.55)}#g .b.gone{opacity:.15}
+#g .b.s3{background:#4a4420}#g .b.s2{background:#2a2818}#g .b.s1{background:#15181a}#g .b.s0{background:#0a0b0b;color:#6d726a}#g .b.s0>svg{opacity:.08}#g .b.s0 em{display:none}#g .b.s3 u{color:#ffe27a}#g .b.s2 u{color:#cfc07a}#g .b.s1 u{color:#8d8a70}#g .b.s0 u{color:#5d6259;font-weight:400}#g .b.gone{opacity:.15}
 #g .b u{position:absolute;z-index:1;right:2px;bottom:1px;text-decoration:none;font-weight:700;font-size:calc(var(--fs) + 4px);color:#e9ebe1;background:#0009;border-radius:4px;padding:0 4px}
-#g .b.r1 u{background:#c7bd7d;color:#151813}
+#g .b em{position:absolute;z-index:1;left:0;right:0;bottom:0;height:5px;display:flex}#g .b em s{display:block;height:100%}#g .b u{bottom:6px}
+.mx{font-size:13px;color:#e9ebe1;margin-top:1px}.nm{font-size:12px;line-height:1.3;margin-top:2px}
+#g .b q{position:relative;z-index:1;quotes:none;display:block;font-weight:700;color:#fff;font-size:var(--fs);line-height:1.1;margin-top:2px;overflow-wrap:anywhere}
+#g .b.soft>i::after{content:' ?';color:#e8b43a}
+#lg{display:flex;flex-wrap:wrap;gap:2px 10px;padding:0 10px 5px;font-size:11px;color:#9aa08c;flex:none}#lg i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:3px}#lg[hidden]{display:none}
+#g .b.r1 u{background:#ffd84a!important;color:#151813!important}#g .b.r1{border-color:#ffd84a;box-shadow:inset 0 0 0 1px #ffd84a}
 #g .b.done{background:color-mix(in srgb,var(--c) 55%,#151813);border-color:var(--c);box-shadow:inset 0 0 0 1px var(--c)}#g .b.done>i{color:#fff}
 #g .b.no.done{background:#0d0f0c;border-color:#3a4034;box-shadow:none}#g .b.no.done>i,#g .b.no.done u{color:#7d8370}
 #g .b.hot{outline:2px solid #fff;outline-offset:-2px;z-index:2}#g .b.sel{outline:2px dashed #c7bd7d;outline-offset:-2px;z-index:3}
 #g .b canvas{position:relative;z-index:1;width:100%;max-width:90px;display:block;opacity:.9}
 .us{position:absolute;left:0;right:0;pointer-events:none;background:repeating-linear-gradient(45deg,#2a2d20 0 6px,#15170f 6px 12px);opacity:.7}
 #vw{position:absolute;left:-1px;right:0;border-left:3px solid #c7bd7d;pointer-events:none}
-#k{display:flex;gap:6px;align-items:center;padding:4px 8px;font-size:12px;flex:none}#k select{flex:1;min-width:0;font:inherit;background:#262b22;color:#e9ebe1;border:1px solid #3a4133;border-radius:6px;padding:3px}
+#k{flex-wrap:wrap;display:flex;gap:6px;align-items:center;padding:4px 8px;font-size:12px;flex:none}#k button{font:inherit;background:#262b22;color:#e9ebe1;border:1px solid #3a4133;border-radius:6px;padding:3px 8px;cursor:pointer}#k button[hidden]{display:none}#k select{flex:1;min-width:0;font:inherit;background:#262b22;color:#e9ebe1;border:1px solid #3a4133;border-radius:6px;padding:3px}
 #f{display:flex;gap:6px;padding:6px 8px;flex:none;border-top:1px solid #2e3428}#f button{flex:1;font:inherit;font-size:12px;color:#e9ebe1;background:#262b22;border:1px solid #3a4133;border-radius:6px;padding:5px 6px;cursor:pointer}#f button.hot{background:#c7bd7d;color:#151813}#f button[hidden]{display:none}`;
 // quiet — открываем сами после выбора окна; false, если браузер не разрешил без нажатия
 async function openPip(quiet){if(!('documentPictureInPicture' in window)){if(quiet!==true)status('Окно поверх игры есть только в Chrome 116 и новее');return quiet===true}
  try{if(PIP){PIP.focus();return true}const w=await documentPictureInPicture.requestWindow({width:460,height:700});const d=w.document,st=d.createElement('style');st.textContent=PIP_CSS;d.head.append(st);
-  d.title='Ухо торговца';d.body.innerHTML='<div id="p"></div><div id="st"><button data-s="scan">Сканировать</button><button data-s="done" class="q" hidden>Готово</button><span></span></div><div id="bar"><i></i></div><div id="g" hidden><div id="gi"></div></div><ul id="l"></ul><div id="k" hidden><span></span><select aria-label="Подпись ящика"></select></div><div id="f"><button data-a="learn">Запомнить окно торговца</button><button data-a="not">Это не торговец</button><button data-a="frame">Сохранить кадр</button><button data-a="clear">Очистить</button></div>';
+  d.title='Ухо торговца';d.body.innerHTML='<div id="p"></div><div id="st"><button data-s="scan">Сканировать</button><button data-s="done" class="q" hidden>Готово</button><span></span></div><div id="bar"><i></i></div><div id="g" hidden><div id="gi"></div></div><div id="lg" hidden><span><b style="color:#ffe27a">★★★</b> тяни первым</span><span><b style="color:#cfc07a">★★</b> стоит</span><span><b style="color:#8d8a70">★</b> вряд ли</span><span>✕ красных нет</span><span style="flex-basis:100%;height:0"></span><span>Полоска — что может быть:</span>'+Object.entries(TC).map(([k,v])=>'<span><i style="background:'+v+'"></i>'+TW[k]+'</span>').join('')+'</div><ul id="l"></ul><div id="k" hidden><span></span><select aria-label="Подпись ящика"></select><button data-ok>Верно</button></div><div id="f"><button data-a="learn">Запомнить окно торговца</button><button data-a="not">Это не торговец</button><button data-a="frame">Сохранить кадр</button><button data-a="clear">Очистить</button></div>';
   d.getElementById('st').addEventListener('click',e=>{const b=e.target.closest('button');if(b)(b.dataset.s==='scan'?scanStart:scanDone)()});
   d.getElementById('f').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;const a=b.dataset.a;if(a==='clear')clearDone();else if(a==='frame')saveFull();else trLearn(a==='not')});
   d.getElementById('g').addEventListener('click',e=>{const el=e.target.closest('.b');if(!el)return;const key=el.dataset.k,L=lastFin.last;
    // итог без места (курсор не увидели) — клик по клетке ставит его туда
-   if(L&&!L.tg&&Date.now()-lastFin.at<20000){tgAssign(L,key);showNow(L)}TGS.sel=key;renderGrid(false,true)});
-  const ks=d.querySelector('#k select');ks.innerHTML='<option value="">Что написано на ящике?</option>'+Object.entries(LBL).map(([k,v])=>`<option value="${k}">${v[0]}</option>`).join('');ks.onchange=()=>{if(TGS.sel&&ks.value)lblLearn(TGS.sel,ks.value)};
+   if(L&&!L.tg&&Date.now()-lastFin.at<20000){tgAssign(L,key);showNow(L)}TGS.sel=key;renderGrid(false,true);const b=TGS.map.get(key);if(b)b.res?renderPip(b.res):renderPip(lastNow)});
+  const ks=d.querySelector('#k select');ks.innerHTML='<option value="">Что написано на ящике?</option>'+Object.entries(LBL).map(([k,v])=>`<option value="${k}">${v[0]}</option>`).join('');ks.onchange=()=>{if(TGS.sel&&ks.value)lblLearn(TGS.sel,ks.value)};d.querySelector('#k [data-ok]').onclick=()=>{if(TGS.sel&&ks.value)lblLearn(TGS.sel,ks.value)};
   PIP=w;TGS.sig='';w.addEventListener('pagehide',()=>{PIP=null});renderPip(lastNow);return true}catch(e){if(quiet!==true)status('Не удалось открыть окно: '+e.message);return false}}
 // карта ящиков в окне: рамка — подпись, число — очередь, заливка — итог по звуку
 function renderGrid(scroll,force){if(!PIP)return;const D=PIP.document,g=D.getElementById('g'),gi=D.getElementById('gi');if(!g)return;const L=[...TGS.map.values()];
@@ -1167,29 +1201,30 @@ function renderGrid(scroll,force){if(!PIP)return;const D=PIP.document,g=D.getEle
   const left=L.filter(b=>b.rank).length,best=L.filter(b=>b.rank).sort((a,b)=>a.rank-b.rank)[0];st.querySelector('span').textContent=sc?'Шаг 1 · '+scanText():TGS.phase==='check'?'Шаг 2 · тяни по очереди, осталось '+left+(best?', №1 — '+(best.k?LBL[best.k][0]:'?')+' '+boxSize(best):''):L.length?'ящиков '+L.length+' · для полного списка нажми «Сканировать»':VER+(S.ctx&&TGS.diag?' · '+TGS.diag:'');
   D.querySelector('#bar i').style.width=sc?Math.round(s.a/s.n*100)+'%':'0'}
  g.hidden=!L.length;D.getElementById('l').hidden=!!L.length||TGS.phase!=='auto';const k=D.getElementById('k'),sb=TGS.sel&&TGS.map.get(TGS.sel);
- k.hidden=!sb;if(sb){k.firstChild.textContent=boxSize(sb);const s=k.querySelector('select');if(D.activeElement!==s)s.value=sb.k||''}
+ k.hidden=!sb;if(sb){k.firstChild.textContent=boxSize(sb)+(sb.res?'':' · '+(mixText(sb.mix)||''));const s=k.querySelector('select');if(D.activeElement!==s)s.value=sb.k||'';k.querySelector('[data-ok]').hidden=!sb.soft}
+ D.getElementById('lg').hidden=!L.length;
  if(!L.length){TGS.sig='';return}
  const rows=Math.max(TGS.phase==='check'?0:TGS.total,...L.map(b=>b.row+b.h)),cw=(gi.clientWidth||g.clientWidth||400)/9;gi.style.setProperty('--cw',cw+'px');gi.style.setProperty('--fs',Math.max(7.5,Math.min(13,cw*.185)).toFixed(1)+'px');gi.style.backgroundSize=(100/9)+'% '+cw+'px';
  const box='<svg viewBox="0 0 24 20"><path fill="#fff" d="M2 6 9 1l13 3v10l-8 5-12-4zm12 4v8l7-4V6zM3 8v6l10 4v-8z"/></svg>';
  let un='';if(TGS.phase!=='check')for(let r=0;r<rows;r++)if(!rowSeen(r))un+=`<div class="us" style="top:${(r*cw).toFixed(1)}px;height:${cw.toFixed(1)}px"></div>`;
  const html=un+L.map(b=>{const d=b.res?verdict(b.res):null,q=b.k?LBL[b.k]:null,wait=pick&&pick.it.tg===b.key;
-  const cls=['b',q&&q[2]?'l'+q[2]:'',b.gone?'gone':'',d?'done '+d.c:'',!d&&!b.pv?'skip':'',!d&&b.rank&&b.rank<=3?'r1':'',b.key===TGS.hot||wait?'hot':'',b.key===TGS.sel?'sel':''].filter(Boolean).join(' ');
-  const u=wait?'…':d?(d.c==='no'?'нет':d.c==='q'?'?':d.pc):b.real?Math.round(b.pv*100)+'%':b.rank||'–';
-  return`<div class="${cls}" data-k="${b.key}" title="${esc((q?q[0]:'подпись не узнана')+' · '+boxSize(b))}" style="left:${b.c/9*100}%;width:${b.w/9*100}%;top:${(b.row*cw).toFixed(1)}px;height:${(b.h*cw).toFixed(1)}px">${q?'<i>'+q[b.w<2&&cw<44?1:0]+'</i>':'<canvas></canvas>'}${box}<u>${u}</u></div>`}).join('')+`<div id="vw" style="top:${(TGS.shift*cw).toFixed(1)}px;height:${(TGS.rows*cw).toFixed(1)}px"></div>`;
+  const cls=['b',q&&q[2]?'l'+q[2]:'',b.gone?'gone':'',d?'done '+d.c:'',!d&&b.st!=null?'s'+b.st:'',!d&&b.rank&&b.rank<=3?'r1':'',b.key===TGS.hot||wait?'hot':'',b.key===TGS.sel?'sel':'',b.soft&&b.k?'soft':''].filter(Boolean).join(' ');
+  const u=wait?'…':d?(d.c==='no'?(d.sure?'нет':'нет?'):d.c==='q'?'?':d.pc+(b.w*cw>80?' красн.':'')):b.gone?'':(b.real?Math.round(b.pv*100)+'% ':b.rank?b.rank+' ':'')+(b.st?'★'.repeat(b.st):'✕');
+  return`<div class="${cls}" data-k="${b.key}" title="${esc((q?q[0]:'подпись не узнана')+' · '+boxSize(b)+' · '+(d&&d.V?mixText(d.V.mix):'до звука: '+mixText(b.mix)))}" style="left:${b.c/9*100}%;width:${b.w/9*100}%;top:${(b.row*cw).toFixed(1)}px;height:${(b.h*cw).toFixed(1)}px">${q?'<i>'+q[b.w<2&&cw<44?1:0]+'</i>':'<canvas></canvas>'}${d&&d.c!=='no'&&d.c!=='q'&&b.w>1&&b.h>1?(L2=>L2.length?`<q>${esc(L2[0].n)}${L2.length>1?' +'+(L2.length-1):''}</q>`:'')(cand(d.V)):''}${box}<u>${u}</u>${mixBar(d&&d.V?d.V.mix:b.mix)}</div>`}).join('')+`<div id="vw" style="top:${(TGS.shift*cw).toFixed(1)}px;height:${(TGS.rows*cw).toFixed(1)}px"></div>`;
  if(html!==TGS.sig||force){TGS.sig=html;gi.style.height=rows*cw+'px';gi.innerHTML=html;
   for(const el of gi.querySelectorAll('canvas')){const b=TGS.map.get(el.parentNode.dataset.k);if(!b||!b.lb)continue;el.width=68;el.height=20;const c=el.getContext('2d'),im=c.createImageData(68,20);b.lb.forEach((v,i)=>{const q=Math.min(255,v*1.5);im.data[i*4]=im.data[i*4+1]=im.data[i*4+2]=q;im.data[i*4+3]=255});c.putImageData(im,0,0)}}
  if(scroll)g.scrollTop=TGS.shift*cw}
 function renderPip(it){if(!PIP)return;renderGrid(false);const D=PIP.document,el=D.getElementById('p');if(!el)return;
  const live=TR.on&&S.ctx,btn=a=>D.querySelector('#f [data-a='+a+']');btn('learn').hidden=!S.ctx||live;btn('learn').className=S.ctx&&!TR.pos.length&&!TR.auto?'hot':'';if(TR.auto)btn('learn').hidden=true;btn('not').hidden=!live;
- const left=[...TGS.map.values()].filter(b=>b.rank).length;let c='q',big=TGS.phase==='scan'?'Сканирую':'Жду ящик',pc='',note=TGS.map.size?'ящиков: '+TGS.map.size+', стоит проверить: '+left+' · прокрути список вниз':'наведи, дождись цены и потяни';
+ const left=[...TGS.map.values()].filter(b=>b.rank).length;let mix='',names='';let c='q',big=TGS.phase==='scan'?'Сканирую':'Жду ящик',pc='',note=TGS.map.size?'ящиков: '+TGS.map.size+', стоит проверить: '+left+' · прокрути список вниз':'наведи, дождись цены и потяни';
  if(!CAT.length){big='Нет звуков';note='загрузи файл со звуками на странице'}
  else if(!S.ctx){big='Не слушаю';note='нажми «Слушать игру» на странице'}
  else if(!TR.pos.length&&!TR.auto&&!it){big='Открой торговца';note='ящики появятся сами; если нет — «Запомнить окно торговца»'}
  else if((TR.pos.length||TR.auto)&&VIS.on&&!TR.on){big='Не у торговца';note='открой окно торговца — начну слушать'}
  else if(it&&TGS.phase!=='scan'){if(it.kind&&!it.merged){if(it.kind==='взять'){big='Слышу…';note='отпусти ящик — покажу итог'}else{big='Потяни мышкой';note='перенос кнопкой F не считается'}}
-  else{const d=verdict(it);c=d.c;big=d.big;pc=d.pc;note=[it.tg?'':it.no?'ящик '+it.no+(TGS.map.size?' · нажми на его клетку':''):'',it.label?LBL[it.label][0]:'',d.V&&d.V.key,d.note].filter(Boolean).join(' · ')}}
- el.className=c;el.innerHTML=`<div class="m"><span class="${live?'on':''}">● ${trText()}</span><span>${set.map?mapName(set.map,set.mode):'карта не указана'}</span></div><div class="big"><span>${esc(big)}</span><b>${pc}</b></div><div class="s">${esc(note)}</div>`;
- const L=D.getElementById('l');L.innerHTML=DONE.map(x=>{const d=verdict(x);return`<li class="${d.c}"><span class="no_">${x.no}</span><canvas></canvas><span class="t">${d.big}${d.V&&d.V.key?' <small>'+d.V.key+'</small>':''}</span><b>${d.pc}</b></li>`}).join('');
+  else{const d=verdict(it);c=d.c;big=d.big;pc=d.c==='q'||d.c==='no'?'':'красный '+d.pc;if(d.V){mix=mixText(d.V.mix);const L=cand(d.V);if(L.length)names=L.slice(0,5).map(x=>`<span style="color:${TC[x.t]}">${esc(x.n)}</span>`).join(', ')+(L.length>5?' и ещё '+(L.length-5):'')}note=[it.tg?'':it.no?'ящик '+it.no+(TGS.map.size?' · нажми на его клетку':''):'',it.label?LBL[it.label][0]:'',d.V&&d.V.key,d.note].filter(Boolean).join(' · ')}}
+ el.className=c;el.innerHTML=`<div class="m"><span class="${live?'on':''}">● ${trText()}</span><span>${set.map?mapName(set.map,set.mode):'карта не указана'}</span></div><div class="big"><span>${esc(big)}</span><b>${pc}</b></div><div class="s">${esc(note)}</div>${mix?`<div class="mx">${mix}</div>`:''}${names?`<div class="nm">${names}</div>`:''}`;
+ const L=D.getElementById('l');L.innerHTML=DONE.map(x=>{const d=verdict(x);return`<li class="${d.c}"><span class="no_">${x.no}</span><canvas></canvas><span class="t">${d.big}${d.V&&d.V.key?' <small>'+d.V.key+'</small>':''}</span><b>${d.c==='q'||d.c==='no'?'':'красный '+d.pc}</b></li>`}).join('');
  [...L.children].forEach((li,i)=>{const s=DONE[i].size&&DONE[i].size.shot,cv=li.querySelector('canvas');if(s){cv.width=s.width;cv.height=s.height;try{cv.getContext('2d').drawImage(s,0,0)}catch(e){}}})}
 $('bPip').onclick=()=>openPip();
 $('bLearn').onclick=()=>trLearn(false);$('bNotTr').onclick=()=>trLearn(true);$('bForget').onclick=()=>{TR.pos=[];TR.neg=[];trSave();status('Окно торговца забыто')};
@@ -1205,7 +1240,7 @@ async function saveFrames(it){if(!it||!it.dbg){status(it&&set.vis&&VIS.on?'Ка�
 $('bDbg').onclick=()=>saveFrames(lastNow);
 
 
-window.ABI_TEST={attach,stop,get set(){return set},get vis(){return VIS},get PACK(){return PACK},get CAT(){return CAT},get RECENT(){return RECENT},Detector,features,match,unb64,view,verdict,showNow,markFound,addRecent,finish,listChance,openPip,get PIP(){return PIP},TR,TGS,TGSRC,scanStart,scanDone,scanState,inPool,POOLS,poolReds,saveFull,VER,LBT,LBL,tgFrame,tgAssign,boxAt,tgClear,prior,lblLearn,lblSend,renderPip,trLearn,inTrader,DONE,clearDone,onLive,visWorker,get JOURNAL(){return JOURNAL},get OWN(){return OWN},GROUPS};
+window.ABI_TEST={attach,stop,get set(){return set},get vis(){return VIS},get PACK(){return PACK},get CAT(){return CAT},get RECENT(){return RECENT},Detector,features,match,unb64,view,verdict,showNow,markFound,addRecent,finish,listChance,openPip,get PIP(){return PIP},TR,TGS,TGSRC,mapSave,mapLoad,mixText,vote,scanStart,scanDone,scanState,inPool,POOLS,poolReds,poolMix,stars,saveFull,VER,LBT,LBL,tgFrame,tgAssign,boxAt,tgClear,prior,lblLearn,lblSend,renderPip,trLearn,inTrader,DONE,clearDone,onLive,visWorker,get JOURNAL(){return JOURNAL},get OWN(){return OWN},GROUPS};
 $('fAudio').onchange=async e=>{const files=[...e.target.files];e.target.value='';const dc=S.pctx||(S.pctx=new AudioContext());let n=0;
  for(const f of files){try{status('Режу: '+f.name);const buf=await dc.decodeAudioData(await f.arrayBuffer());const L=buf.length,a=buf.getChannelData(0),b=buf.numberOfChannels>1?buf.getChannelData(1):a;
   const det=new Detector(buf.sampleRate,()=>set,(seg,sr)=>{if(addRecent(seg,sr,f.name))n++});
@@ -1243,7 +1278,7 @@ async function loadBuiltins(sr){$('packBanner').hidden=!!PACK;if(!PACK){renderCa
    fresh.push({id:'b-'+name+(k?'#'+k:''),g,sr,seg,builtin:true,alt:k>0,kind,feat:features(seg,sr)})})}catch(e){}}
  CAT=fresh.concat(CAT.filter(e=>!e.builtin));renderCat();refreshTitles()}
 /* ===== Старт ===== */
-(async()=>{await openDB();try{const pk=await packGet();if(pk&&Array.isArray(pk.sounds))PACK=pk.sounds}catch(e){}await loadBuiltins(48000);const rows=await dbAll();for(const r of rows){try{addRef(r.g,toF32(new Int16Array(r.pcm)),r.sr,r.id,r.created,r.kind)}catch(e){}}renderCat();renderMaps();renderTr();renderJ();renderOwn();fillDevices()})();
+(async()=>{await openDB();try{const pk=await packGet();if(pk&&Array.isArray(pk.sounds))PACK=pk.sounds}catch(e){}await loadBuiltins(48000);const rows=await dbAll();for(const r of rows){try{addRef(r.g,toF32(new Int16Array(r.pcm)),r.sr,r.id,r.created,r.kind)}catch(e){}}mapLoad();renderCat();renderMaps();renderTr();renderJ();renderOwn();fillDevices()})();
 }
 </script>
 <script>if('serviceWorker' in navigator&&location.protocol==='https:'){try{navigator.serviceWorker.register('sw.js',{updateViaCache:'none'})}catch(e){}}</script>
